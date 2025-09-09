@@ -1,39 +1,123 @@
-import type { CodeProps } from './code';
+import { isValidElement, useRef } from 'react';
+import {
+  CodeButtonGroup,
+  type CodeButtonGroupProps,
+  useCodeButtonGroup,
+} from './code/CodeButtonGroup';
 
-const DEFAULT_LANGUAGE_CLASS = 'language-bash';
+export type ShikiPreProps = {
+  containerElementClassName: string | undefined;
+  title: string | undefined;
+  className: string | undefined;
+  codeButtonGroupProps?: Omit<
+    CodeButtonGroupProps,
+    'preElementRef' | 'codeWrap' | 'toggleCodeWrap'
+  >;
 
-export function parseTitleFromMeta(meta: string): string {
-  if (!meta) {
-    return '';
-  }
-  let result = meta;
-  const highlightReg = /{[\d,-]*}/i;
-  const highlightMeta = highlightReg.exec(meta)?.[0];
-  if (highlightMeta) {
-    result = meta.replace(highlightReg, '').trim();
-  }
-  result = result.split('=')[1] ?? '';
-  return result?.replace(/["'`]/g, '');
+  // private
+  preElementRef: React.RefObject<HTMLPreElement | null>;
+  child: React.ReactElement;
+} & React.HTMLProps<HTMLPreElement>;
+
+function ShikiPre({
+  child,
+  containerElementClassName,
+  preElementRef,
+  title,
+  className,
+  codeButtonGroupProps,
+  ...otherProps
+}: ShikiPreProps) {
+  const { codeWrap, toggleCodeWrap } = useCodeButtonGroup();
+  return (
+    <div className={containerElementClassName}>
+      {title && <div className="rspress-code-title">{title}</div>}
+      <div className="rspress-code-content rspress-scrollbar">
+        <div>
+          <pre
+            ref={preElementRef}
+            className={[codeWrap ? 'rp-force-wrap' : '', className]
+              .filter(Boolean)
+              .join(' ')}
+            {...otherProps}
+          >
+            {child}
+          </pre>
+        </div>
+        <CodeButtonGroup
+          {...codeButtonGroupProps}
+          preElementRef={preElementRef}
+          codeWrap={codeWrap}
+          toggleCodeWrap={toggleCodeWrap}
+        />
+      </div>
+    </div>
+  );
 }
 
-export function Pre({
+export interface PreWithCodeButtonGroupProps
+  extends React.HTMLProps<HTMLPreElement> {
+  containerElementClassName?: string;
+  className?: string;
+  title?: string;
+  codeButtonGroupProps?: Omit<
+    CodeButtonGroupProps,
+    'preElementRef' | 'codeWrap' | 'toggleCodeWrap'
+  >;
+}
+
+/**
+ * expected wrapped pre element is:
+ * ```html
+ *<div class="language-js">
+ *  <div class="rspress-code-title">test.js</div>
+ *  <div class="rspress-code-content rspress-scrollbar">
+ *    <div>
+ *      <pre class="shiki css-variables" tabindex="0">
+ *        <code class="language-js">
+ *        </code>
+ *      </pre>
+ *    </div>
+ *    <div class="code-button-group_fb445">
+ *      <button class="" title="Toggle code wrap"></button>
+ *      <button class="code-copy-button_c5089" title="Copy code"></button>
+ *    </div>
+ *  </div>
+ *</div>
+ *```
+ */
+export function PreWithCodeButtonGroup({
+  containerElementClassName,
   children,
-}: {
-  children: React.ReactElement[] | React.ReactElement;
-}) {
-  const renderChildren = (children: React.ReactElement) => {
-    const { className, meta } = children.props as CodeProps;
-    const codeTitle = parseTitleFromMeta(meta);
+  className,
+  title,
+  codeButtonGroupProps,
+  ...otherProps
+}: PreWithCodeButtonGroupProps) {
+  const preElementRef = useRef<HTMLPreElement>(null);
+
+  const renderChild = (child: React.ReactElement<{ className?: string }>) => {
+    const { className: codeElementClassName } = child.props;
     return (
-      <div className={className || DEFAULT_LANGUAGE_CLASS}>
-        {codeTitle && <div className="rspress-code-title">{codeTitle}</div>}
-        <div className="rspress-code-content rspress-scrollbar">{children}</div>
-      </div>
+      <ShikiPre
+        {...otherProps}
+        child={child}
+        className={className}
+        title={title}
+        preElementRef={preElementRef}
+        codeButtonGroupProps={codeButtonGroupProps}
+        containerElementClassName={
+          containerElementClassName ?? codeElementClassName
+        }
+      />
     );
   };
 
   if (Array.isArray(children)) {
-    return <div>{children.map(child => renderChildren(child))}</div>;
+    return <>{children.map(child => renderChild(child))}</>;
   }
-  return renderChildren(children);
+
+  if (!isValidElement<{ className?: string }>(children)) return null;
+
+  return renderChild(children);
 }

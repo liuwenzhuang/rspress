@@ -1,57 +1,53 @@
 {
   "name": "@rspress/plugin-rss",
-  "version": "1.28.3",
+  "version": "2.0.0-beta.31",
   "description": "A plugin for rss generation for rspress",
   "bugs": "https://github.com/web-infra-dev/rspress/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rspress",
+    "url": "git+https://github.com/web-infra-dev/rspress.git",
     "directory": "packages/plugin-rss"
   },
   "license": "MIT",
-  "jsnext:source": "./src/index.ts",
-  "types": "./dist/index.d.ts",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.cjs"
+      "types": "./index.d.ts",
+      "default": "./dist/index.js"
     },
-    "./FeedsAnnotations": "./static/global-components/FeedsAnnotations"
+    "./FeedsAnnotations": "./static/global-components/FeedsAnnotations.tsx"
   },
+  "module": "./dist/index.js",
+  "types": "./index.d.ts",
+  "files": [
+    "dist",
+    "static",
+    "index.d.ts"
+  ],
   "scripts": {
-    "dev": "modern build -w",
-    "build": "modern build",
-    "reset": "rimraf ./**/node_modules",
-    "test": "vitest run --passWithNoTests"
-  },
-  "engines": {
-    "node": ">=14.17.6"
+    "build": "rslib build",
+    "dev": "rslib build -w",
+    "reset": "rimraf ./**/node_modules"
   },
   "dependencies": {
-    "@rspress/shared": "workspace:*",
     "feed": "^4.2.2"
   },
   "devDependencies": {
-    "@rspress/runtime": "workspace:*",
-    "@types/node": "^18.11.17",
-    "@types/react": "^18.3.3",
-    "react": "^18.3.1",
-    "typescript": "^5.5.3"
+    "@rslib/core": "0.12.4",
+    "@types/node": "^22.8.1",
+    "@types/react": "^19.1.12",
+    "react": "^19.1.1",
+    "rsbuild-plugin-publint": "^0.3.3",
+    "typescript": "^5.8.2"
   },
   "peerDependencies": {
-    "react": ">=17.0.0",
-    "rspress": "workspace:^1.28.3"
+    "@rspress/core": "workspace:^2.0.0-beta.31"
   },
-  "files": [
-    "dist",
-    "static"
-  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "publishConfig": {
     "access": "public",
-    "provenance": true,
     "registry": "https://registry.npmjs.org/"
   }
 }

@@ -1,6 +1,6 @@
-import { useLocaleSiteData } from '../../logic';
+import { useLocaleSiteData } from '@rspress/runtime';
 import { Link } from '@theme';
-import styles from './index.module.scss';
+import * as styles from './index.module.scss';
 
 interface PrevNextPageProps {
   type: 'prev' | 'next';
@@ -10,7 +10,7 @@ interface PrevNextPageProps {
 
 export function PrevNextPage(props: PrevNextPageProps) {
   const { type, text, href } = props;
-  const { prevPageText = 'Previous Page', nextPageText = 'Next page' } =
+  const { prevPageText = 'Previous Page', nextPageText = 'Next Page' } =
     useLocaleSiteData();
   const pageText = type === 'prev' ? prevPageText : nextPageText;
   const linkClassName =

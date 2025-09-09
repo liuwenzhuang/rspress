@@ -1,20 +1,20 @@
-import React, { useMemo } from 'react';
 import MonacoEditor, {
   loader,
   type EditorProps as MonacoEditorProps,
 } from '@monaco-editor/react';
 import { useDark } from '@rspress/core/runtime';
+import { useMemo } from 'react';
 import { DEFAULT_MONACO_URL } from './constant';
 
 // inject by Rsbuild in cli/index.ts
-// see: https://rsbuild.dev/config/source/define
+// see: https://rsbuild.rs/config/source/define
 declare global {
-  const __PLAYGROUND_MONACO_LOADER__: any;
-  const __PLAYGROUND_MONACO_OPTIONS__: any;
+  const __PLAYGROUND_MONACO_LOADER__: Parameters<typeof loader.config>[0];
+  const __PLAYGROUND_MONACO_OPTIONS__: MonacoEditorProps['options'];
 }
 
 function initLoader() {
-  let loaderConfig = {
+  let loaderConfig: Parameters<typeof loader.config>[0] = {
     paths: {
       vs: DEFAULT_MONACO_URL,
     },
@@ -26,7 +26,7 @@ function initLoader() {
     if (keys.length > 0) {
       loaderConfig = __PLAYGROUND_MONACO_LOADER__;
     }
-  } catch (e) {
+  } catch (_e) {
     // ignore
   }
 
@@ -37,7 +37,7 @@ initLoader();
 function getMonacoOptions() {
   try {
     return __PLAYGROUND_MONACO_OPTIONS__;
-  } catch (e) {
+  } catch (_e) {
     // ignore
   }
   return {};

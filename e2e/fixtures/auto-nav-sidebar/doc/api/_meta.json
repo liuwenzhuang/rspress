@@ -2,7 +2,8 @@
   {
     "type": "file",
     "name": "index",
-    "label": "API Overview"
+    "label": "API Overview",
+    "context": "api-overview"
   },
   {
     "type": "dir",
@@ -15,6 +16,17 @@
     "name": "client-api",
     "label": "Client API",
     "context": "client-api"
+  },
+  {
+    "type": "custom-link",
+    "label": "Rspack Official Docsite",
+    "link": "https://rspack.rs/",
+    "context": "rspack-official-docsite-custom-link"
+  },
+  {
+    "type": "dir",
+    "name": "link",
+    "label": "Link"
   },
   "commands",
   "single-page"

@@ -1,5 +1,5 @@
-import getRandomPort from 'get-port';
 import spawn from 'cross-spawn';
+import getRandomPort from 'get-port';
 import treeKill from 'tree-kill';
 
 const portMap = new Map();
@@ -9,18 +9,24 @@ export interface CommandOptions {
   env: Record<string, string>;
 }
 
-export type Command = 'dev' | 'build' | 'preview';
+export type Command =
+  | 'dev'
+  | `dev -- -c ${string}`
+  | 'build'
+  | `build -- -c ${string}`
+  | 'preview';
 
 export function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function runCommand(
+export async function runNpmScript(
   commandName: Command,
   options: CommandOptions,
 ) {
+  const command = commandName.split(' ')[0];
   return new Promise((resolve, reject) => {
-    const instance = spawn('npm', ['run', commandName], {
+    const instance = spawn('npm', ['run', ...commandName.split(' ')], {
       cwd: options.appDir,
       env: {
         TEST: '1',
@@ -39,13 +45,13 @@ export async function runCommand(
 
     async function handleStdout(data) {
       const message = data.toString();
-      const bootupMarkers = {
-        dev: /compiled/i,
-        preview: /Network:/i,
-        build: /Pages rendered/,
+      const markers = {
+        dev: /built in/i,
+        preview: /Local:/i,
+        build: /File (web)/,
       };
 
-      if (bootupMarkers[commandName].test(message)) {
+      if (markers[command].test(message)) {
         if (!didResolve) {
           didResolve = true;
           resolve(instance);
@@ -80,24 +86,32 @@ export async function runCommand(
   });
 }
 
-export async function runDevCommand(appDir: string, port: number) {
-  return runCommand('dev', {
+export async function runDevCommand(
+  appDir: string,
+  port: number,
+  configFile?: string,
+) {
+  return runNpmScript(configFile ? `dev -- -c ${configFile}` : 'dev', {
     appDir,
     env: {
       PORT: port.toString(),
+      // This is an escape hatch for playwright test, playwright does not support lazyCompilation
+      RSPRESS_LAZY_COMPILATION: 'false',
+      // FIXME: Rspack's buildDependencies should collected the dependencies of rspress.config.ts, plugins change can not trigger the cache invalidate now
+      RSPRESS_PERSISTENT_CACHE: 'false',
     },
   });
 }
 
-export async function runBuildCommand(appDir: string) {
-  return runCommand('build', {
+export async function runBuildCommand(appDir: string, configFile?: string) {
+  return runNpmScript(configFile ? `build -- -c ${configFile}` : 'build', {
     appDir,
     env: {},
   });
 }
 
 export async function runPreviewCommand(appDir: string, port: number) {
-  return runCommand('preview', {
+  return runNpmScript('preview', {
     appDir,
     env: {
       PORT: port.toString(),

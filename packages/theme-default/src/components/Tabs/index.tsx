@@ -1,20 +1,19 @@
 import {
   Children,
-  type ReactNode,
+  type ComponentPropsWithRef,
+  type ForwardedRef,
+  forwardRef,
+  isValidElement,
   type ReactElement,
+  type ReactNode,
+  useContext,
+  useEffect,
   useMemo,
   useState,
-  useEffect,
-  useContext,
-  forwardRef,
-  type ForwardedRef,
-  isValidElement,
-  type ComponentPropsWithRef,
-  type ForwardRefExoticComponent,
 } from 'react';
 import { TabDataContext } from '../../logic/TabDataContext';
 import { useStorageValue } from '../../logic/useStorageValue';
-import styles from './index.module.scss';
+import * as styles from './index.module.scss';
 
 type TabItem = {
   value?: string;
@@ -48,8 +47,8 @@ const renderTab = (item: ReactNode | TabItem) => {
 
 export const groupIdPrefix = 'rspress.tabs.';
 
-export const Tabs: ForwardRefExoticComponent<TabsProps> = forwardRef(
-  (props: TabsProps, ref: ForwardedRef<any>): ReactElement => {
+export const Tabs = forwardRef(
+  (props: TabsProps, ref: ForwardedRef<HTMLDivElement>): ReactElement => {
     const {
       values,
       defaultValue,
@@ -62,24 +61,30 @@ export const Tabs: ForwardRefExoticComponent<TabsProps> = forwardRef(
     // remove "\n" character when write JSX element in multiple lines, use Children.toArray for Tabs with no Tab element
     const children = Children.toArray(rawChildren).filter(
       child => !(typeof child === 'string' && child.trim() === ''),
-    );
+    ) as unknown as ReactElement<TabProps>[];
 
     let tabValues = values || [];
 
     if (tabValues.length === 0) {
-      tabValues = Children.map(children, child => {
-        if (isValidElement(child)) {
-          return {
-            label: child.props?.label,
-            value: child.props?.value || child.props?.label,
-          };
-        }
+      tabValues = Children.map<TabItem, ReactElement<TabProps>>(
+        children,
+        child => {
+          if (isValidElement(child)) {
+            return {
+              label: child.props?.label || undefined,
+              value:
+                child.props?.value ||
+                (child.props?.label as string) ||
+                undefined,
+            };
+          }
 
-        return {
-          label: undefined,
-          value: undefined,
-        };
-      });
+          return {
+            label: undefined,
+            value: undefined,
+          };
+        },
+      );
     }
 
     const { tabData, setTabData } = useContext(TabDataContext);
@@ -99,9 +104,9 @@ export const Tabs: ForwardRefExoticComponent<TabsProps> = forwardRef(
       });
     });
 
-    const [storageIndex, setStorageIndex] = useStorageValue(
+    const [storageIndex, setStorageIndex] = useStorageValue<string>(
       `${groupIdPrefix}${groupId}`,
-      activeIndex,
+      activeIndex.toString(),
     );
 
     const syncIndex = useMemo(() => {
@@ -110,16 +115,16 @@ export const Tabs: ForwardRefExoticComponent<TabsProps> = forwardRef(
           return tabData[groupId];
         }
 
-        return Number.parseInt(storageIndex);
+        return Number.parseInt(storageIndex, 10);
       }
 
       return activeIndex;
-    }, [tabData[groupId]]);
+    }, [groupId && tabData[groupId]]);
 
     // sync when other browser page trigger update
     useEffect(() => {
       if (groupId) {
-        const correctIndex = Number.parseInt(storageIndex);
+        const correctIndex = Number.parseInt(storageIndex, 10);
 
         if (syncIndex !== correctIndex) {
           setTabData({ ...tabData, [groupId]: correctIndex });
@@ -154,7 +159,7 @@ export const Tabs: ForwardRefExoticComponent<TabsProps> = forwardRef(
                       onChange?.(index);
                       if (groupId) {
                         setTabData({ ...tabData, [groupId]: index });
-                        setStorageIndex(index);
+                        setStorageIndex(index.toString());
                       } else {
                         setActiveIndex(index);
                       }
@@ -173,13 +178,12 @@ export const Tabs: ForwardRefExoticComponent<TabsProps> = forwardRef(
   },
 );
 
-export function Tab({
-  children,
-  ...props
-}: ComponentPropsWithRef<'div'> &
-  Pick<TabItem, 'label' | 'value'>): ReactElement {
+export type TabProps = ComponentPropsWithRef<'div'> &
+  Pick<TabItem, 'label' | 'value'>;
+
+export function Tab({ children, ...props }: TabProps): ReactElement {
   return (
-    <div {...props} className="rounded px-2">
+    <div {...props} className="rp-rounded rp-px-2">
       {children}
     </div>
   );

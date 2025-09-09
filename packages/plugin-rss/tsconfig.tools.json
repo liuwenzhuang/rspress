@@ -1,14 +1,14 @@
 {
-  "extends": "@modern-js/tsconfig/base",
+  "extends": "@rspress/config/tsconfig",
   "compilerOptions": {
     "composite": true,
-    "declaration": false,
-    "module": "Node16",
+    "declaration": true,
+    "noEmit": false,
+    "module": "ESNext",
     "target": "ES2020",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "moduleResolution": "Node16",
-    "noEmit": true
+    "moduleResolution": "bundler"
   },
-  "include": ["modern.config.ts", "vitest.config.ts"]
+  "include": ["rslib.config.ts"]
 }

@@ -1,19 +1,12 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
-/* eslint-disable @typescript-eslint/no-require-imports */
-import { type ReactNode, Suspense, memo, type ReactElement } from 'react';
-import { matchRoutes, useLocation } from 'react-router-dom';
+import { memo, type ReactNode, Suspense, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import siteData from 'virtual-site-data';
-import { normalizeRoutePath } from './utils';
-import { useViewTransition } from './hooks';
+import { useViewTransition } from './hooks/useViewTransition';
+import { pathnameToRouteService } from './route';
 
-const { routes } = process.env.__SSR__
-  ? (require('virtual-routes-ssr') as typeof import('virtual-routes-ssr'))
-  : (require('virtual-routes') as typeof import('virtual-routes'));
-
-function TransitionContentImpl(props: { el: ReactElement }) {
+function TransitionContentImpl(props: { el: ReactNode }) {
   let element = props.el;
   if (siteData?.themeConfig?.enableContentAnimation) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     element = useViewTransition(props.el);
   }
   return element;
@@ -24,22 +17,17 @@ const TransitionContent = memo(
   (prevProps, nextProps) => prevProps.el === nextProps.el,
 );
 
+// TODO: fallback should be a loading spinner
 export const Content = ({ fallback = <></> }: { fallback?: ReactNode }) => {
   const { pathname } = useLocation();
-  const matched = matchRoutes(routes, normalizeRoutePath(pathname));
-  if (!matched) {
-    return <div></div>;
-  }
-  const routesElement = matched[0].route.element;
-
-  // React 17 Suspense SSR is not supported
-  if (!process.env.__IS_REACT_18__ && process.env.__SSR__) {
-    return routesElement;
-  }
+  const matchedElement = useMemo(() => {
+    const route = pathnameToRouteService(pathname);
+    return route?.element;
+  }, [pathname]);
 
   return (
     <Suspense fallback={fallback}>
-      <TransitionContent el={routesElement} />
+      <TransitionContent el={matchedElement} />
     </Suspense>
   );
 };

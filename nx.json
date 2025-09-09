@@ -4,8 +4,7 @@
     "default": {
       "runner": "nx/tasks-runners/default",
       "options": {
-        "cacheableOperations": ["dev", "build", "test"],
-        "cacheDirectory": ".nx-cache"
+        "cacheableOperations": ["dev", "build", "test"]
       }
     }
   },
@@ -14,7 +13,7 @@
       "{projectRoot}/src/**/*",
       "{projectRoot}/tsconfig.json",
       "{projectRoot}/package.json",
-      "{projectRoot}/modern.config.*"
+      "{projectRoot}/rslib.config.*"
     ],
     "dev": ["default"],
     "build": ["default"],

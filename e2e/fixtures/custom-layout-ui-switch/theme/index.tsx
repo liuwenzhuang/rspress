@@ -1,5 +1,4 @@
-import Theme from 'rspress/theme';
-import { Layout as BaseLayout } from 'rspress/theme';
+import { Layout as BaseLayout } from '@rspress/core/theme';
 
 const Layout = () => {
   return (
@@ -11,9 +10,5 @@ const Layout = () => {
   );
 };
 
-export default {
-  ...Theme,
-  Layout,
-};
-
-export * from 'rspress/theme';
+export { Layout };
+export * from '@rspress/core/theme';

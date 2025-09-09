@@ -1,26 +1,73 @@
+import fs from 'node:fs';
 import path from 'node:path';
-import fs from '@rspress/shared/fs-extra';
-import enhancedResolve from 'enhanced-resolve';
 import { logger } from '@rspress/shared/logger';
+import enhancedResolve from 'enhanced-resolve';
+import picocolors from 'picocolors';
 import { PACKAGE_ROOT } from '../constants';
+import { hintReactVersion } from '../logger/hint';
+import { pathExists, readJson } from './fs';
 
+// TODO: replace enhanced-resolve with this.getResolver
 const { CachedInputFileSystem, ResolverFactory } = enhancedResolve;
 
-const DEFAULT_REACT_VERSION = 18;
-
-export async function detectReactVersion(): Promise<number> {
-  // Detect react version from current cwd
-  // return the major version of react
-  // if not found, return 18
+async function detectPackageMajorVersion(
+  name: string,
+): Promise<number | undefined> {
   const cwd = process.cwd();
-  const reactPath = path.join(cwd, 'node_modules', 'react');
-  if (await fs.pathExists(reactPath)) {
-    const reactPkg = await fs.readJson(path.join(reactPath, 'package.json'));
-    const version = Number(reactPkg.version.split('.')[0]);
+  const pkgPath = path.join(cwd, 'node_modules', name);
+  if (await pathExists(pkgPath)) {
+    const pkgJson = await readJson<{ version?: string }>(
+      path.join(pkgPath, 'package.json'),
+    );
+    const version = Number(pkgJson.version?.split('.')[0]);
     return version;
   }
 
-  return DEFAULT_REACT_VERSION;
+  return undefined;
+}
+
+const DEFAULT_REACT_VERSION = 19;
+export async function detectReactVersion(): Promise<number> {
+  return (await detectPackageMajorVersion('react')) ?? DEFAULT_REACT_VERSION;
+}
+
+// FIXME: currently in Rspress we only support react-router-dom ^6.29.0
+export async function resolveReactRouterDomAlias(): Promise<
+  Record<string, string>
+> {
+  const alias: Record<string, string> = {};
+  const resolver = ResolverFactory.createResolver({
+    fileSystem: new CachedInputFileSystem(
+      fs as unknown as enhancedResolve.CachedInputFileSystem['fileSystem'],
+      0,
+    ),
+    mainFields: ['browser', 'module', 'main'],
+    extensions: ['.js'],
+    alias,
+  });
+
+  try {
+    const pkgPath = await new Promise<string>((resolve, reject) => {
+      resolver.resolve(
+        { importer: PACKAGE_ROOT },
+        PACKAGE_ROOT,
+        'react-router-dom',
+        {},
+        (err, filePath) => {
+          if (err || !filePath) {
+            return reject(err);
+          }
+          return resolve(filePath);
+        },
+      );
+    });
+    return {
+      'react-router-dom': pkgPath,
+    };
+  } catch (e) {
+    logger.warn('react-router-dom not found: \n', e);
+  }
+  return {};
 }
 
 export async function resolveReactAlias(reactVersion: number, isSSR: boolean) {
@@ -31,18 +78,21 @@ export async function resolveReactAlias(reactVersion: number, isSSR: boolean) {
     'react/jsx-runtime',
     'react/jsx-dev-runtime',
     'react-dom',
+    'react-dom/client',
     'react-dom/server',
   ];
-  if (reactVersion === DEFAULT_REACT_VERSION) {
-    libPaths.push('react-dom/client');
-  }
+
   const alias: Record<string, string> = {};
   const resolver = ResolverFactory.createResolver({
-    fileSystem: new CachedInputFileSystem(fs as any, 0),
+    fileSystem: new CachedInputFileSystem(
+      fs as unknown as enhancedResolve.CachedInputFileSystem['fileSystem'],
+      0,
+    ),
     extensions: ['.js'],
     alias,
     conditionNames: isSSR ? ['...'] : ['browser', '...'],
   });
+
   await Promise.all(
     libPaths.map(async lib => {
       try {
@@ -53,7 +103,7 @@ export async function resolveReactAlias(reactVersion: number, isSSR: boolean) {
             lib,
             {},
             (err, filePath) => {
-              if (err || filePath === false) {
+              if (err || !filePath) {
                 return reject(err);
               }
               return resolve(filePath);
@@ -61,8 +111,12 @@ export async function resolveReactAlias(reactVersion: number, isSSR: boolean) {
           );
         });
       } catch (e) {
-        console.log(e);
-        logger.warn(`${lib} not found`);
+        if (e instanceof Error) {
+          logger.warn(
+            `${lib} not found: \n    ${picocolors.gray(e.toString())}`,
+          );
+          hintReactVersion();
+        }
       }
     }),
   );

@@ -1,34 +1,30 @@
-import {
-  type NavItemWithLink,
-  type NavItemWithLinkAndChildren,
-  withoutBase,
+import type {
+  NavItemWithLink,
+  NavItemWithLinkAndChildren,
 } from '@rspress/shared';
-import { normalizeHrefInRuntime as normalizeHref } from '@rspress/runtime';
 import { Link, Tag } from '@theme';
-import styles from './index.module.scss';
+import * as styles from './index.module.scss';
 
 interface Props {
   pathname: string;
   langs?: string[];
-  base: string;
   rightIcon?: React.ReactNode;
+  onClick?: () => void;
 }
 
 export function NavMenuSingleItem(
   item: (NavItemWithLink | NavItemWithLinkAndChildren) & Props,
 ) {
-  const { pathname, base } = item;
-  const isActive = new RegExp(item.activeMatch || item.link).test(
-    withoutBase(pathname, base),
-  );
+  const { pathname } = item;
+  const isActive = new RegExp(item.activeMatch || item.link).test(pathname);
 
   return (
-    <Link href={normalizeHref(item.link)}>
+    <Link href={item.link} onClick={item.onClick}>
       <div
         key={item.text}
         className={`rspress-nav-menu-item ${styles.singleItem} ${
-          isActive ? styles.activeItem : ''
-        } text-sm font-medium mx-1.5 px-3 py-2 flex items-center`}
+          isActive ? `${styles.activeItem} rspress-nav-menu-item-active` : ''
+        } rp-text-sm rp-font-medium rp-mx-0.5 rp-px-3 rp-py-2 rp-flex rp-items-center`}
       >
         <Tag tag={item.tag} />
         {item.text}

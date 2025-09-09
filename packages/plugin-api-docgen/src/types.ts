@@ -1,4 +1,3 @@
-import type { PageIndexInfo } from '@rspress/shared';
 import type { ParserOptions } from 'react-docgen-typescript';
 import type { CompilerOptions } from 'typescript';
 
@@ -62,15 +61,11 @@ export type PluginOptions = {
 };
 
 export type DocGenOptions = Required<PluginOptions> & {
-  languages: ('zh' | 'en')[];
+  languages: ('zh' | 'en' | 'ru')[];
   isProd: boolean;
 };
 
-export type SupportLanguages = 'zh' | 'en';
-
-export type ExtendedPageData = PageIndexInfo & {
-  apiDocMap: Record<string, string>;
-};
+export type SupportLanguages = 'zh' | 'en' | 'ru';
 
 export type WatchFileInfo = {
   apiParseTool: ApiParseTool;

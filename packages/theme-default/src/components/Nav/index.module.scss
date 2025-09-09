@@ -2,10 +2,12 @@
   background-color: transparent;
 }
 
-.hidden {
-  transform: translate3d(0, calc(-100%), 0);
-  background: transparent;
-  opacity: 0;
+@media (min-width: 1280px) {
+  .hidden {
+    transform: translate3d(0, calc(-100%), 0);
+    background: transparent;
+    opacity: 0;
+  }
 }
 
 .container {
@@ -24,6 +26,28 @@
   // box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
 }
 
+.relative {
+  position: relative;
+}
+
+.sticky {
+  position: sticky;
+
+  // https://github.com/web-infra-dev/rspress/issues/1540
+  + section {
+    :global {
+      .rspress-sidebar-menu-container {
+        margin-top: calc(var(--rp-nav-height) * -1);
+        padding-top: var(--rp-nav-height);
+      }
+
+      .rspress-local-toc-container {
+        margin-top: var(--rp-nav-height);
+      }
+    }
+  }
+}
+
 .leftNav {
   display: none;
 }
@@ -38,7 +62,6 @@
 
 .activeItem,
 .singleItem:hover {
-  background-color: var(--rp-c-bg-mute);
   cursor: pointer;
   color: var(--rp-c-link);
   border-radius: var(--rp-radius);
@@ -52,27 +75,12 @@
   pointer-events: all;
 }
 
-.social-links-icon {
-  width: 20px;
-  height: 100%;
-  display: flex;
-  fill: currentColor;
-  color: var(--rp-c-text-2);
-
-  &:hover {
-    color: var(--rp-c-text-1);
-  }
-}
-
 .menu-item {
   display: none;
   margin: 0 8px;
 }
 
 @media (max-width: 768px) {
-  :root {
-    --rp-nav-height: 56px;
-  }
   .menu-item:before {
     display: none;
   }

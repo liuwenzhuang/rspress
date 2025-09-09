@@ -1,7 +1,8 @@
 import type { Header } from '@rspress/shared';
-import { usePageData } from '@rspress/runtime';
-import { renderInlineMarkdown, scrollToTarget } from '../../logic';
 import './index.css';
+import { renderInlineMarkdown } from '../../logic/utils';
+import { useDynamicToc } from '../Aside/useDynamicToc';
+import { Link } from '../Link';
 
 const TocItem = ({
   header,
@@ -11,27 +12,22 @@ const TocItem = ({
   onItemClick?: (header: Header) => void;
 }) => {
   return (
-    <li key={header.id}>
-      <a
+    <li>
+      <Link
         href={`#${header.id}`}
-        className={'rspress-toc-link sm:text-normal text-sm'}
+        className={'rspress-toc-link sm:rp-text-normal rp-text-sm'}
         style={{
           marginLeft: (header.depth - 2) * 12,
         }}
-        onClick={e => {
-          e.preventDefault();
-          window.location.hash = header.id;
-          const target = document.getElementById(header.id);
-          if (target) {
-            scrollToTarget(target, false);
-          }
+        onClick={() => {
           onItemClick?.(header);
         }}
       >
-        <span className={'rspress-toc-link-text block'}>
-          {renderInlineMarkdown(header.text)}
-        </span>
-      </a>
+        <span
+          className={'rspress-toc-link-text rp-block'}
+          {...renderInlineMarkdown(header.text)}
+        ></span>
+      </Link>
     </li>
   );
 };
@@ -41,13 +37,14 @@ export function Toc({
 }: {
   onItemClick?: (header: Header) => void;
 }) {
-  const { page } = usePageData();
-
+  const headers = useDynamicToc();
   return (
-    <ul>
-      {page.toc.map(item => (
-        <TocItem key={item.id} header={item} onItemClick={onItemClick} />
-      ))}
-    </ul>
+    headers.length > 0 && (
+      <ul>
+        {headers.map(item => (
+          <TocItem key={item.id} header={item} onItemClick={onItemClick} />
+        ))}
+      </ul>
+    )
   );
 }

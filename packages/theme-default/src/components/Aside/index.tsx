@@ -1,83 +1,99 @@
-import { useEffect } from 'react';
+import { useLocation } from '@rspress/runtime';
 import type { Header } from '@rspress/shared';
+import { useEffect, useMemo } from 'react';
+import { scrollToTarget, useBindingAsideScroll } from '../../logic/sideEffects';
+import { useUISwitch } from '../../logic/useUISwitch.js';
 import {
-  useHiddenNav,
-  scrollToTarget,
-  bindingAsideScroll,
-  renderInlineMarkdown,
   parseInlineMarkdownText,
-} from '../../logic';
-import { DEFAULT_NAV_HEIGHT } from '../../logic/sideEffects';
+  renderInlineMarkdown,
+} from '../../logic/utils';
+
 import './index.scss';
+import { useDynamicToc } from './useDynamicToc';
 
-export function Aside(props: { headers: Header[]; outlineTitle: string }) {
-  const { headers } = props;
-  const hasOutline = headers.length > 0;
+const TocItem = ({
+  header,
+  baseHeaderLevel,
+}: {
+  header: Header;
+  baseHeaderLevel: number;
+}) => {
+  return (
+    <li>
+      <a
+        href={`#${header.id}`}
+        title={parseInlineMarkdownText(header.text)}
+        className="aside-link rp-transition-all rp-duration-300 hover:rp-text-text-1 rp-text-text-2 rp-block"
+        style={{
+          marginLeft: (header.depth - baseHeaderLevel) * 12,
+          fontWeight: 'semibold',
+        }}
+        onClick={e => {
+          e.preventDefault();
+          window.location.hash = header.id;
+        }}
+      >
+        <span
+          className="aside-link-text rp-block"
+          {...renderInlineMarkdown(header.text)}
+        ></span>
+      </a>
+    </li>
+  );
+};
+
+export function Aside({ outlineTitle }: { outlineTitle: string }) {
+  const { scrollPaddingTop } = useUISwitch();
+  const headers = useDynamicToc();
+
   // For outline text highlight
-  const baseHeaderLevel = headers[0]?.depth || 2;
-  const hiddenNav = useHiddenNav();
+  const baseHeaderLevel = 2;
 
+  const { hash: locationHash = '', pathname } = useLocation();
+  const decodedHash: string = useMemo(
+    () => decodeURIComponent(locationHash),
+    [locationHash],
+  );
+
+  useBindingAsideScroll(headers);
+
+  // why window.scrollTo(0, 0)?
+  // when using history.scrollRestoration = 'auto' ref: "useUISwitch.ts", we scroll to the last page's position when navigating to nextPage
   useEffect(() => {
-    let unbinding: (() => void) | undefined;
-
-    setTimeout(() => {
-      unbinding = bindingAsideScroll();
-    }, 100);
-    const hash = decodeURIComponent(window.location.hash);
-    if (!hash) {
+    if (decodedHash.length === 0) {
       window.scrollTo(0, 0);
     } else {
-      const target = document.getElementById(hash.slice(1));
+      const target = document.getElementById(decodedHash.slice(1));
       if (target) {
-        scrollToTarget(target, false, hiddenNav ? 0 : DEFAULT_NAV_HEIGHT);
+        scrollToTarget(target, false, scrollPaddingTop);
       }
     }
-    return () => {
-      if (unbinding) {
-        unbinding();
-      }
-    };
-  }, [headers]);
+  }, [decodedHash, headers, pathname]);
 
-  const renderHeader = (header: Header) => {
-    return (
-      <li key={header.id}>
-        <a
-          href={`#${header.id}`}
-          title={parseInlineMarkdownText(header.text)}
-          className="aside-link transition-all duration-300 hover:text-text-1 text-text-2 block"
-          style={{
-            paddingLeft: (header.depth - baseHeaderLevel) * 12,
-            fontWeight: 'semibold',
-          }}
-          onClick={e => {
-            e.preventDefault();
-            window.location.hash = header.id;
-            const target = document.getElementById(header.id);
-            if (target) {
-              scrollToTarget(target, false, hiddenNav ? 0 : DEFAULT_NAV_HEIGHT);
-            }
-          }}
-        >
-          <span className="aside-link-text block">
-            {renderInlineMarkdown(header.text)}
-          </span>
-        </a>
-      </li>
-    );
-  };
+  if (headers.length === 0) {
+    return <></>;
+  }
 
   return (
-    <div className="flex flex-col">
-      <div className={hasOutline ? '<lg:hidden' : 'hidden'}>
-        <div id="aside-container" className="relative text-sm font-medium">
-          <div className="leading-7 block text-sm font-semibold pl-3">
-            {props.outlineTitle}
-          </div>
-          <nav className="mt-1">
-            <ul className="relative">{headers.map(renderHeader)}</ul>
-          </nav>
+    <div className="rp-flex rp-flex-col">
+      <div
+        id="aside-container"
+        className="rp-relative rp-text-sm rp-font-medium"
+      >
+        <div className="rp-leading-7 rp-block rp-text-sm rp-font-semibold rp-pl-3">
+          {outlineTitle}
         </div>
+        <nav className="rp-mt-1">
+          <ul className="rp-relative">
+            {headers.map((header, index) => (
+              <TocItem
+                key={`${header.depth}_${header.text}_${header.id}_${index}`}
+                baseHeaderLevel={baseHeaderLevel}
+                header={header}
+              />
+            ))}
+          </ul>
+        </nav>
       </div>
     </div>
   );

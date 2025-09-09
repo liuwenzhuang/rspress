@@ -1,53 +1,48 @@
-import siteData from 'virtual-site-data';
 import {
   addLeadingSlash,
-  removeTrailingSlash,
-  normalizeSlash,
+  isDataUrl,
+  isExternalUrl,
   isProduction,
   normalizeHref,
-  withBase as rawWithBase,
   removeBase as rawRemoveBase,
-  isExternalUrl,
-  isDataUrl,
+  withBase as rawWithBase,
   removeHash,
+  removeTrailingSlash,
 } from '@rspress/shared';
+import siteData from 'virtual-site-data';
 
-export function normalizeRoutePath(routePath: string) {
-  return decodeURIComponent(routePath)
-    .replace(/\.html$/, '')
-    .replace(/\/index$/, '/');
-}
-
-export function withBase(url = '/'): string {
+function withBase(url = '/'): string {
   return rawWithBase(url, siteData.base);
 }
 
-export function removeBase(url: string): string {
+function removeBase(url: string): string {
   return rawRemoveBase(url, siteData.base);
 }
 
-export function isEqualPath(a: string, b: string) {
+function isEqualPath(a: string, b: string) {
   return (
-    withBase(normalizeHrefInRuntime(removeHash(a))) ===
-    withBase(normalizeHrefInRuntime(removeHash(b)))
+    removeBase(normalizeHref(removeHash(a), true)) ===
+    removeBase(normalizeHref(removeHash(b), true))
   );
 }
 
-export function normalizeHrefInRuntime(a: string) {
+function normalizeHrefInRuntime(link: string) {
   const cleanUrls = Boolean(siteData?.route?.cleanUrls);
-  return normalizeHref(a, cleanUrls);
+  return normalizeHref(link, cleanUrls);
 }
 
-export function normalizeImagePath(imagePath: string) {
-  const isProd = isProduction();
-  if (!isProd) {
-    return imagePath;
+/**
+ * we do cleanUrls in runtime side
+ */
+function cleanUrlByConfig(link: string) {
+  if (siteData?.route?.cleanUrls) {
+    return normalizeHref(link, true);
   }
-  if (
-    isExternalUrl(imagePath) ||
-    isDataUrl(imagePath) ||
-    imagePath.startsWith('//')
-  ) {
+  return link;
+}
+
+function normalizeImagePath(imagePath: string) {
+  if (isAbsoluteUrl(imagePath)) {
     return imagePath;
   }
   // only append base to internal non-relative urls
@@ -58,4 +53,18 @@ export function normalizeImagePath(imagePath: string) {
   return withBase(imagePath);
 }
 
-export { addLeadingSlash, removeTrailingSlash, normalizeSlash, isProduction };
+function isAbsoluteUrl(path: string) {
+  return isExternalUrl(path) || isDataUrl(path) || path.startsWith('//');
+}
+
+export {
+  addLeadingSlash,
+  removeTrailingSlash,
+  isProduction,
+  normalizeImagePath,
+  cleanUrlByConfig,
+  removeBase,
+  withBase,
+  isEqualPath,
+  normalizeHrefInRuntime,
+};

@@ -1,11 +1,12 @@
-import type { LocalSearchOptions, RemoteSearchOptions } from '@rspress/shared';
+import type { LocalSearchOptions } from '@rspress/shared';
+import type { ReactNode } from 'react';
 
 export const enum RenderType {
   Default = 'default',
   Custom = 'custom',
 }
 
-export interface HightlightInfo {
+export interface HighlightInfo {
   start: number;
   length: number;
 }
@@ -15,8 +16,7 @@ interface CommonMatchResult {
   header: string;
   link: string;
   query: string;
-  highlightInfoList: HightlightInfo[];
-  group: string;
+  highlightInfoList: HighlightInfo[];
 }
 
 interface TitleMatch extends CommonMatchResult {
@@ -54,11 +54,9 @@ export type MatchResult = (DefaultMatchResult | CustomMatchResult)[];
 export type PageSearcherConfig = {
   currentLang: string;
   currentVersion: string;
-  extractGroupName: (path: string) => string;
 };
 
-export type SearchOptions = (LocalSearchOptions | RemoteSearchOptions) &
-  PageSearcherConfig;
+export type SearchOptions = LocalSearchOptions & PageSearcherConfig;
 
 export type BeforeSearch = (query: string) => string | Promise<string> | void;
 
@@ -75,4 +73,4 @@ export type AfterSearch = (
   matchedResult: MatchResult,
 ) => void | Promise<void>;
 
-export type RenderSearchFunction<T = unknown> = (result: T) => JSX.Element;
+export type RenderSearchFunction<T = unknown> = (result: T) => ReactNode;

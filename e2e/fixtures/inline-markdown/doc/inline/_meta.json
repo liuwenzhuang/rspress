@@ -1,0 +1,10 @@
+[
+  { "type": "file", "label": "Overview", "name": "index" },
+  "all",
+  "str",
+  "bold",
+  "emphasis",
+  "code",
+  "escape",
+  "delete"
+]

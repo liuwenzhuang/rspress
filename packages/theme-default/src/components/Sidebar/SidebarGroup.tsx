@@ -1,28 +1,26 @@
+import type { NormalizedSidebarGroup } from '@rspress/shared';
+import { Tag } from '@theme';
+import ArrowRight from '@theme-assets/arrow-right';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
-import { type NormalizedSidebarGroup, SidebarItem } from '@rspress/shared';
-import {
-  useNavigate,
-  normalizeHrefInRuntime as normalizeHref,
-  withBase,
-} from '@rspress/runtime';
-import ArrowRight from '@theme-assets/arrow-right';
-import { Tag } from '@theme';
-import styles from './index.module.scss';
-import { SidebarItem as SidebarItemComp } from './SidebarItem';
-import { SidebarDivider } from './SidebarDivider';
-import { highlightTitleStyle, type SidebarItemProps } from '.';
+import { renderInlineMarkdown } from '../../logic/utils';
+import { useNavigate } from '../Link/useNavigate';
 import { SvgWrapper } from '../SvgWrapper';
-import { renderInlineMarkdown } from '../../logic';
+import { highlightTitleStyle, type SidebarItemProps } from '.';
+import * as styles from './index.module.scss';
+import { SidebarDivider } from './SidebarDivider';
+import { SidebarItem as SidebarItemComp } from './SidebarItem';
+import { SidebarSectionHeader } from './SidebarSectionHeader';
+import { isSidebarDivider, isSidebarSectionHeader, preloadLink } from './utils';
 
 export function SidebarGroup(props: SidebarItemProps) {
   const { item, depth = 0, activeMatcher, id, setSidebarData } = props;
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
-  const transitionRef = useRef<any>(null);
+  const transitionRef = useRef<number>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const initialRender = useRef(true);
-  const initialState = useRef((item as NormalizedSidebarGroup).collapsed);
+  const initialState = useRef('collapsed' in item && item.collapsed);
   const active = item.link && activeMatcher(item.link);
   const { collapsed, collapsible = true } = item as NormalizedSidebarGroup;
   const collapsibleIcon = (
@@ -59,7 +57,7 @@ export function SidebarGroup(props: SidebarItemProps) {
       container.style.transitionDuration = '0.5s';
       inner.style.opacity = '0';
 
-      transitionRef.current = setTimeout(() => {
+      transitionRef.current = window.setTimeout(() => {
         if (containerRef.current) {
           containerRef.current.style.maxHeight = '0px';
         }
@@ -69,7 +67,7 @@ export function SidebarGroup(props: SidebarItemProps) {
       container.style.transitionDuration = '0.3s';
       inner.style.opacity = '1';
 
-      transitionRef.current = setTimeout(() => {
+      transitionRef.current = window.setTimeout(() => {
         if (containerRef.current) {
           containerRef.current.style.removeProperty('max-height');
         }
@@ -103,20 +101,22 @@ export function SidebarGroup(props: SidebarItemProps) {
   return (
     <section
       key={id}
-      className="mt-0.5 block"
+      className="rspress-sidebar-section rp-mt-0.5 rp-block"
       data-context={item.context}
       style={{
         marginLeft: depth === 0 ? 0 : '18px',
       }}
     >
       <div
-        className={`flex justify-between items-center ${
+        className={`rspress-sidebar-collapse rp-flex rp-justify-between rp-items-center ${
           active ? styles.menuItemActive : styles.menuItem
         }`}
-        onMouseEnter={() => item.link && props.preloadLink(item.link)}
+        data-context={item.context}
+        // we use div instead of Link, so preloadLink manually
+        onMouseEnter={() => item.link && preloadLink(item.link)}
         onClick={e => {
           if (item.link) {
-            navigate(withBase(normalizeHref(item.link)));
+            navigate(item.link);
           }
           collapsible && toggleCollapse(e);
         }}
@@ -127,24 +127,23 @@ export function SidebarGroup(props: SidebarItemProps) {
         }}
       >
         <h2
-          className="py-2 px-3 text-sm font-medium flex"
+          className="rp-py-2 rp-px-3 rp-text-sm rp-font-medium rp-flex"
           style={{
             ...(depth === 0 ? highlightTitleStyle : {}),
           }}
         >
           <Tag tag={item.tag} />
           <span
-            className="flex-center"
+            className="rp-flex rp-items-center rp-justify-center"
             style={{
               fontSize: depth === 0 ? '14px' : '13px',
             }}
-          >
-            {renderInlineMarkdown(item.text)}
-          </span>
+            {...renderInlineMarkdown(item.text)}
+          ></span>
         </h2>
         {collapsible && (
           <div
-            className={`${styles.collapseContainer} p-2 rounded-xl`}
+            className={`${styles.collapseContainer} rp-p-2 rp-rounded-xl`}
             onClick={toggleCollapse}
           >
             {collapsibleIcon}
@@ -153,7 +152,7 @@ export function SidebarGroup(props: SidebarItemProps) {
       </div>
       <div
         ref={containerRef}
-        className="transition-all duration-300 ease-in-out"
+        className="rp-transition-all rp-duration-300 rp-ease-in-out"
         style={{
           overflow: 'hidden',
           maxHeight: initialState.current ? 0 : undefined,
@@ -161,31 +160,34 @@ export function SidebarGroup(props: SidebarItemProps) {
       >
         <div
           ref={innerRef}
-          className="rspress-sidebar-group transition-opacity duration-500 ease-in-out"
+          className="rspress-sidebar-group rp-transition-opacity rp-duration-500 rp-ease-in-out"
           style={{
             opacity: initialState.current ? 0 : 1,
             marginLeft: depth === 0 ? '12px' : 0,
           }}
         >
           {(item as NormalizedSidebarGroup)?.items?.map((item, index) =>
-            'dividerType' in item ? (
+            isSidebarDivider(item) ? (
               <SidebarDivider
                 // eslint-disable-next-line react/no-array-index-key
                 key={index}
                 depth={depth + 1}
                 dividerType={item.dividerType}
               />
+            ) : isSidebarSectionHeader(item) ? (
+              <SidebarSectionHeader
+                sectionHeaderText={item.sectionHeaderText}
+                key={index}
+              />
             ) : (
               // eslint-disable-next-line react/no-array-index-key
-              <div key={index} data-context={item.context}>
-                <SidebarItemComp
-                  {...props}
-                  item={item}
-                  depth={depth + 1}
-                  id={`${id}-${index}`}
-                  preloadLink={props.preloadLink}
-                />
-              </div>
+              <SidebarItemComp
+                {...props}
+                key={index}
+                item={item}
+                depth={depth + 1}
+                id={`${id}-${index}`}
+              />
             ),
           )}
         </div>

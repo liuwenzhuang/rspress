@@ -23,17 +23,19 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Install Pnpm
-        run: corepack enable
+        run: |
+          npm install -g corepack@latest --force
+          corepack enable
 
-      - name: Setup Node.js 18.x
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
         with:
-          node-version: 18.x
+          node-version: 22.x
           cache: 'pnpm'
 
       - name: Install Dependencies

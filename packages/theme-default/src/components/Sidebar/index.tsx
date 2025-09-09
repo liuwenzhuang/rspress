@@ -1,43 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useLocation, useSidebar } from '@rspress/runtime';
 import {
-  inBrowser,
-  normalizeSlash,
-  type NormalizedSidebarGroup,
-  type SidebarItem as ISidebarItem,
   type SidebarDivider as ISidebarDivider,
+  type SidebarItem as ISidebarItem,
   type SidebarSectionHeader as ISidebarSectionHeader,
+  inBrowser,
+  type NormalizedSidebarGroup,
+  type SidebarData,
 } from '@rspress/shared';
-import { routes } from 'virtual-routes';
-import { matchRoutes, useLocation, removeBase } from '@rspress/runtime';
-import { isActive, useLocaleSiteData, useSidebarData } from '../../logic';
-
-import { SidebarItem } from './SidebarItem';
-import { NavBarTitle } from '../Nav/NavBarTitle';
-import { SidebarDivider } from './SidebarDivider';
+import { useEffect, useState } from 'react';
 import type { UISwitchResult } from '../../logic/useUISwitch';
+import { NavBarTitle } from '../Nav/NavBarTitle';
+import * as styles from './index.module.scss';
+import { SidebarDivider } from './SidebarDivider';
+import { SidebarItem } from './SidebarItem';
 import { SidebarSectionHeader } from './SidebarSectionHeader';
-
-import styles from './index.module.scss';
-
-const isSidebarDivider = (
-  item:
-    | NormalizedSidebarGroup
-    | ISidebarItem
-    | ISidebarDivider
-    | ISidebarSectionHeader,
-): item is ISidebarDivider => {
-  return 'dividerType' in item;
-};
-
-const isSidebarSectionHeader = (
-  item:
-    | NormalizedSidebarGroup
-    | ISidebarItem
-    | ISidebarDivider
-    | ISidebarSectionHeader,
-): item is ISidebarSectionHeader => {
-  return 'sectionHeaderText' in item;
-};
+import {
+  isSideBarCustomLink,
+  isSidebarDivider,
+  isSidebarSectionHeader,
+  useActiveMatcher,
+} from './utils';
 
 export interface SidebarItemProps {
   id: string;
@@ -47,10 +29,15 @@ export interface SidebarItemProps {
   collapsed?: boolean;
   setSidebarData: React.Dispatch<
     React.SetStateAction<
-      (NormalizedSidebarGroup | ISidebarItem | ISidebarDivider)[]
+      (
+        | NormalizedSidebarGroup
+        | ISidebarItem
+        | ISidebarDivider
+        | ISidebarSectionHeader
+      )[]
     >
   >;
-  preloadLink: (link: string) => void;
+  contextContainerClassName?: string;
 }
 
 interface Props {
@@ -58,9 +45,8 @@ interface Props {
   beforeSidebar?: React.ReactNode;
   afterSidebar?: React.ReactNode;
   uiSwitch?: UISwitchResult;
+  navTitle?: React.ReactNode;
 }
-
-type SidebarData = (ISidebarDivider | ISidebarItem | NormalizedSidebarGroup)[];
 
 export const highlightTitleStyle = {
   fontSize: '14px',
@@ -73,25 +59,29 @@ export let bodyStyleOverflow: string;
 // Note: the cache object won't be reassign in other module
 // eslint-disable-next-line import/no-mutable-exports
 export let matchCache: WeakMap<
-  NormalizedSidebarGroup | ISidebarItem | ISidebarDivider,
+  | NormalizedSidebarGroup
+  | ISidebarItem
+  | ISidebarDivider
+  | ISidebarSectionHeader,
   boolean
 > = new WeakMap();
 
 export function Sidebar(props: Props) {
-  const { isSidebarOpen, beforeSidebar, afterSidebar, uiSwitch } = props;
+  const { isSidebarOpen, beforeSidebar, afterSidebar, uiSwitch, navTitle } =
+    props;
 
   const { pathname: rawPathname } = useLocation();
-  const { items: rawSidebarData } = useSidebarData();
+  const rawSidebarData = useSidebar();
   const [sidebarData, setSidebarData] = useState<SidebarData>(() => {
     return rawSidebarData.filter(Boolean).flat();
   });
 
-  const localesData = useLocaleSiteData();
   const pathname = decodeURIComponent(rawPathname);
-  const langRoutePrefix = normalizeSlash(localesData.langRoutePrefix || '');
+
+  const activeMatcher = useActiveMatcher();
 
   useEffect(() => {
-    if (inBrowser) {
+    if (inBrowser()) {
       if (isSidebarOpen) {
         bodyStyleOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
@@ -99,6 +89,11 @@ export function Sidebar(props: Props) {
         document.body.style.overflow = bodyStyleOverflow || '';
       }
     }
+    return () => {
+      if (inBrowser()) {
+        document.body.style.overflow = bodyStyleOverflow || '';
+      }
+    };
   }, [isSidebarOpen]);
 
   useEffect(() => {
@@ -109,11 +104,18 @@ export function Sidebar(props: Props) {
     // 2. For current active item, expand its parent group
     // Cache, Avoid redundant calculation
     matchCache = new WeakMap<
-      NormalizedSidebarGroup | ISidebarItem | ISidebarDivider,
+      | NormalizedSidebarGroup
+      | ISidebarItem
+      | ISidebarDivider
+      | ISidebarSectionHeader,
       boolean
     >();
     const match = (
-      item: NormalizedSidebarGroup | ISidebarItem | ISidebarDivider,
+      item:
+        | NormalizedSidebarGroup
+        | ISidebarItem
+        | ISidebarDivider
+        | ISidebarSectionHeader,
     ) => {
       if (matchCache.has(item)) {
         return matchCache.get(item);
@@ -133,7 +135,11 @@ export function Sidebar(props: Props) {
       return false;
     };
     const traverse = (
-      item: NormalizedSidebarGroup | ISidebarItem | ISidebarDivider,
+      item:
+        | NormalizedSidebarGroup
+        | ISidebarItem
+        | ISidebarDivider
+        | ISidebarSectionHeader,
     ) => {
       if ('items' in item) {
         item.items.forEach(traverse);
@@ -147,77 +153,105 @@ export function Sidebar(props: Props) {
     setSidebarData(newSidebarData);
   }, [rawSidebarData, pathname]);
 
-  const removeLangPrefix = (path: string) => {
-    return path.replace(langRoutePrefix, '');
-  };
-  const activeMatcher = (path: string) =>
-    isActive(
-      removeBase(removeLangPrefix(pathname)),
-      removeLangPrefix(path),
-      true,
-    );
-  const preloadLink = (link: string) => {
-    const match = matchRoutes(routes, link);
-    if (match?.length) {
-      const { route } = match[0];
-      route.preload();
-    }
-  };
-  const renderItem = (
-    item:
-      | NormalizedSidebarGroup
-      | ISidebarItem
-      | ISidebarDivider
-      | ISidebarSectionHeader,
-    index: number,
-  ) => {
-    if (isSidebarDivider(item)) {
-      return (
-        <SidebarDivider key={index} depth={0} dividerType={item.dividerType} />
-      );
-    }
-
-    if (isSidebarSectionHeader(item)) {
-      return (
-        <SidebarSectionHeader
-          key={index}
-          sectionHeaderText={item.sectionHeaderText}
-          tag={item.tag}
-        />
-      );
-    }
-
-    return (
-      <SidebarItem
-        id={String(index)}
-        item={item}
-        depth={0}
-        activeMatcher={activeMatcher}
-        key={index}
-        collapsed={(item as NormalizedSidebarGroup).collapsed ?? true}
-        setSidebarData={setSidebarData}
-        preloadLink={preloadLink}
-      />
-    );
-  };
   return (
     <aside
       className={`${styles.sidebar} rspress-sidebar ${
         isSidebarOpen ? styles.open : ''
       }`}
     >
-      {!uiSwitch.showNavbar ? null : (
-        <div className={styles.navTitleMask}>
-          <NavBarTitle />
-        </div>
+      {!uiSwitch?.showNavbar ? null : (
+        <div className={styles.navTitleMask}>{navTitle || <NavBarTitle />}</div>
       )}
       <div className={`rspress-scrollbar ${styles.sidebarContent}`}>
-        <nav className="pb-2">
+        <nav className="rp-pb-2">
           {beforeSidebar}
-          {sidebarData.map(renderItem)}
+          <SidebarList
+            sidebarData={sidebarData}
+            setSidebarData={setSidebarData}
+          />
           {afterSidebar}
         </nav>
       </div>
     </aside>
+  );
+}
+
+export function SidebarList({
+  sidebarData,
+  setSidebarData,
+}: {
+  sidebarData: SidebarData;
+  setSidebarData: React.Dispatch<React.SetStateAction<SidebarData>>;
+}) {
+  const activeMatcher = useActiveMatcher();
+  return (
+    <>
+      {sidebarData.map((item, index) => {
+        return (
+          <SidebarListItem
+            key={index}
+            item={item}
+            index={index}
+            setSidebarData={setSidebarData}
+            activeMatcher={activeMatcher}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function SidebarListItem(props: {
+  item:
+    | NormalizedSidebarGroup
+    | ISidebarItem
+    | ISidebarDivider
+    | ISidebarSectionHeader;
+  index: number;
+  setSidebarData: React.Dispatch<React.SetStateAction<SidebarData>>;
+  activeMatcher: (link: string) => boolean;
+}) {
+  const { item, index, setSidebarData, activeMatcher } = props;
+  if (isSidebarDivider(item)) {
+    return (
+      <SidebarDivider key={index} depth={0} dividerType={item.dividerType} />
+    );
+  }
+
+  if (isSidebarSectionHeader(item)) {
+    return (
+      <SidebarSectionHeader
+        key={index}
+        sectionHeaderText={item.sectionHeaderText}
+        tag={item.tag}
+      />
+    );
+  }
+
+  if (isSideBarCustomLink(item)) {
+    return (
+      <SidebarItem
+        id={String(index)}
+        item={item}
+        depth={0}
+        key={index}
+        collapsed={(item as NormalizedSidebarGroup).collapsed ?? true}
+        setSidebarData={setSidebarData}
+        activeMatcher={activeMatcher}
+        contextContainerClassName="rspress-sidebar-custom-link"
+      />
+    );
+  }
+
+  return (
+    <SidebarItem
+      id={String(index)}
+      item={item}
+      depth={0}
+      key={index}
+      activeMatcher={activeMatcher}
+      collapsed={(item as NormalizedSidebarGroup).collapsed ?? true}
+      setSidebarData={setSidebarData}
+    />
   );
 }

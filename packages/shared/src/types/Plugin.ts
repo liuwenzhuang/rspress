@@ -1,9 +1,9 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { PluggableList } from 'unified';
-import type { UserConfig, PageIndexInfo, RouteMeta } from '.';
+import type { PageIndexInfo, RouteMeta, UserConfig } from '.';
 
 /**
- * There are two ways to define what addtion routes represent.
+ * There are two ways to define what addition routes represent.
  * 1. Define filepath, then the content will be read from the file.
  * 2. Define content, then then content will be written to temp file and read from it.
  */
@@ -61,9 +61,7 @@ export interface RspressPlugin {
    * Extend every page's data
    */
   extendPageData?: (
-    pageData: PageIndexInfo & {
-      [key: string]: unknown;
-    },
+    pageData: PageIndexInfo,
     isProd: boolean,
   ) => void | Promise<void>;
   /**
@@ -75,6 +73,7 @@ export interface RspressPlugin {
   ) => AdditionalPage[] | Promise<AdditionalPage[]>;
   /**
    * Add runtime modules
+   * @deprecated use [rsbuild-plugin-virtual-module](https://github.com/rspack-contrib/rsbuild-plugin-virtual-module) instead.
    */
   addRuntimeModules?: (
     config: UserConfig,
@@ -88,12 +87,12 @@ export interface RspressPlugin {
     isProd: boolean,
   ) => Promise<void> | void;
   /**
-   * Add addition ssg routes, for dynamic routes.
+   * Callback after routeService generated
    */
-  addSSGRoutes?: (
-    config: UserConfig,
+  routeServiceGenerated?: (
+    routeService: any,
     isProd: boolean,
-  ) => { path: string }[] | Promise<{ path: string }[]>;
+  ) => Promise<void> | void;
   /**
    * @private
    * Modify search index data.

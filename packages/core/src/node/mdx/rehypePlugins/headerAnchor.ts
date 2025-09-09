@@ -1,9 +1,9 @@
-import { headingRank } from 'hast-util-heading-rank';
-import { visit } from 'unist-util-visit';
+import { extractTextAndId } from '@rspress/shared/node-utils';
 import GithubSlugger from 'github-slugger';
+import type { Element, Root } from 'hast';
+import { headingRank } from 'hast-util-heading-rank';
 import type { Plugin } from 'unified';
-import type { Root, Element } from 'hast';
-import { extractTextAndId } from '../../utils';
+import { visit } from 'unist-util-visit';
 
 /**
  * Generate `id`s for headings and applies to headings with `id`s.
@@ -11,17 +11,20 @@ import { extractTextAndId } from '../../utils';
  */
 export const rehypeHeaderAnchor: Plugin<[], Root> = () => {
   const slugger = new GithubSlugger();
-  return function (tree) {
-    visit(tree, 'element', function (node) {
-      if (headingRank(node as any)) {
-        // generate id
-        if (!node.properties.id) {
-          const [text, customId] = collectHeaderText(node);
-          node.properties.id = customId || slugger.slug(text);
-        }
-        // apply to headings
-        node.children.unshift(create(node));
+  return tree => {
+    visit(tree, 'element', node => {
+      if (!headingRank(node)) {
+        return;
       }
+      // generate id
+
+      if (!node.properties?.id) {
+        const [text, customId] = collectHeaderText(node);
+        node.properties ??= {};
+        node.properties.id = customId || slugger.slug(text.trim());
+      }
+      // apply to headings
+      node.children.unshift(create(node));
     });
   };
 };
@@ -35,8 +38,7 @@ export const collectHeaderText = (node: Element) => {
       child.value = textPart;
       text += textPart;
       id = idPart;
-    }
-    if (child.type === 'element') {
+    } else if (child.type === 'element') {
       child.children.forEach(c => {
         if (c.type === 'text') {
           text += c.value;
@@ -62,7 +64,7 @@ function create(node: Element): Element {
     properties: {
       class: 'header-anchor',
       ariaHidden: 'true',
-      href: `#${node.properties.id}`,
+      href: `#${node.properties!.id}`,
     },
     children: [
       {

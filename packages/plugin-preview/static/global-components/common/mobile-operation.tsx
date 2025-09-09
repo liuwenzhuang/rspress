@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import { useLang } from '@rspress/core/runtime';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  type MouseEventHandler,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import IconLaunch from '../icons/Launch';
 import IconQrcode from '../icons/Qrcode';
 import IconRefresh from '../icons/Refresh';
-import './index.scss';
+import './index.css';
 
 const locales = {
   zh: {
@@ -28,9 +34,9 @@ export default (props: {
   const triggerRef = useRef(null);
   const t = lang === 'zh' ? locales.zh : locales.en;
 
-  const toggleQRCode = (e: any) => {
+  const toggleQRCode: MouseEventHandler<HTMLButtonElement> = e => {
     if (!showQRCode) {
-      e.target.blur();
+      e.currentTarget.blur();
     }
     setShowQRCode(!showQRCode);
   };
@@ -38,7 +44,7 @@ export default (props: {
     window.open(url);
   };
 
-  const contains = function (root: HTMLElement | null, ele: any) {
+  const contains = function (root: HTMLElement | null, ele: Node | null) {
     if (!root) {
       return false;
     }
@@ -56,13 +62,8 @@ export default (props: {
   };
 
   const onClickOutside = useCallback(
-    (e: MouseEvent) => {
-      console.log(
-        !contains(triggerRef.current, e.target),
-        triggerRef.current,
-        e.target,
-      );
-      if (!contains(triggerRef.current, e.target)) {
+    (ev: MouseEvent) => {
+      if (!contains(triggerRef.current, ev.target as Node)) {
         setShowQRCode(false);
       }
     },

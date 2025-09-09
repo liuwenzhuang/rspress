@@ -1,14 +1,15 @@
-import { join, resolve, dirname } from 'node:path';
-import { visit } from 'unist-util-visit';
-import { normalizePosixPath } from '@rspress/shared';
-import fs from '@rspress/shared/fs-extra';
-import type { Plugin } from 'unified';
-import type { Root } from 'mdast';
+import fs from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { normalizePosixPath } from '@rspress/core';
+import type { Code, Root } from 'mdast';
+import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 import type { MdxjsEsm } from 'mdast-util-mdxjs-esm';
-import type { RemarkPluginOptions, DemoInfo } from './types';
-import { injectDemoBlockImport, generateId } from './utils';
-import { demoBlockComponentPath, virtualDir } from './constant';
+import type { Plugin } from 'unified';
+import { visit } from 'unist-util-visit';
 import { getASTNodeImport, getExternalDemoContent } from './ast-helpers';
+import { demoBlockComponentPath, virtualDir } from './constant';
+import type { DemoInfo, RemarkPluginOptions } from './types';
+import { generateId, getLangFileExt, injectDemoBlockImport } from './utils';
 
 export const demos: DemoInfo = {};
 
@@ -24,9 +25,9 @@ export const remarkCodeToDemo: Plugin<[RemarkPluginOptions], Root> = function ({
   previewCodeTransform,
 }) {
   const routeMeta = getRouteMeta();
-  fs.ensureDirSync(virtualDir);
+  fs.mkdirSync(virtualDir, { recursive: true });
   const data = this.data() as {
-    pageMeta: Record<string, any>;
+    pageMeta: Record<string, unknown>;
   };
   return (tree, vfile) => {
     const demoMdx: MdxjsEsm[] = [];
@@ -39,16 +40,15 @@ export const remarkCodeToDemo: Plugin<[RemarkPluginOptions], Root> = function ({
       return;
     }
     const { pageName } = route;
-    // clear all demo in this pageName and recollect, bacause we may delete the demo
+    // clear all demo in this pageName and recollect, because we may delete the demo
     demos[pageName] = [];
     let title = pageName;
     let index = 1;
-    let externalDemoIndex = 0;
 
     function constructDemoNode(
       demoId: string,
       demoPath: string,
-      currentNode: any,
+      currentNode: Code | MdxJsxFlowElement,
       isMobileMode: boolean,
       // Only for external demo
       externalDemoIndex?: number,
@@ -117,55 +117,13 @@ export const remarkCodeToDemo: Plugin<[RemarkPluginOptions], Root> = function ({
     }
     visit(tree, 'heading', node => {
       if (node.depth === 1) {
-        if (node.children) {
-          title = (node.children[0] as any)?.value || title;
-        }
+        const firstChild = node.children[0];
+        title =
+          (firstChild && 'value' in firstChild && firstChild.value) || title;
       }
     });
 
-    // 1. External demo , use <code src="foo" /> to declare demo
-    visit(tree, 'mdxJsxFlowElement', (node: any) => {
-      if (node.name === 'code') {
-        const src = node.attributes.find(
-          (attr: { name: string; value: string }) => attr.name === 'src',
-        )?.value;
-        if (!src) {
-          return;
-        }
-
-        // don't support expression syntax
-        const currtentMode =
-          node.attributes.find(
-            (attr: { name: string; value: boolean }) =>
-              attr.name === 'previewMode',
-          )?.value ?? previewMode;
-
-        // TODO: remove isMobileAttribute
-        let isMobileMode = node.attributes.find(
-          (attr: { name: string; value: boolean }) => attr.name === 'isMobile',
-        )?.value;
-        if (isMobileMode === undefined) {
-          // isMobile is not specified, eg: <code />
-          isMobileMode = currtentMode === 'iframe';
-        } else if (isMobileMode === null) {
-          // true by default, eg: <code isMobile />
-          isMobileMode = true;
-        } else if (typeof isMobileMode === 'object') {
-          // jsx value, isMobileMode.value now must be string, even if input is
-          // any complex struct rather than primitive type
-          // eg: <code isMobile={ anyOfOrOther([true, false, 'true', 'false', {}]) } />
-          isMobileMode = isMobileMode.value !== 'false';
-        } else {
-          // string value, eg: <code isMobile="true" />
-          isMobileMode = isMobileMode !== 'false';
-        }
-
-        const id = generateId(pageName, index++);
-        constructDemoNode(id, src, node, isMobileMode, externalDemoIndex++);
-      }
-    });
-
-    // 2. Internal demo, such as using ```jsx to declare demo
+    // Internal demo, such as using ```jsx to declare demo
     visit(tree, 'code', node => {
       // hasVisited is a custom property
       if ('hasVisited' in node) {
@@ -174,29 +132,38 @@ export const remarkCodeToDemo: Plugin<[RemarkPluginOptions], Root> = function ({
       if (node.lang && previewLanguages.includes(node.lang)) {
         // do not anything for pure mode
         if (
-          node?.meta?.includes('pure') ||
-          (!node?.meta?.includes('preview') && defaultRenderMode === 'pure')
+          node.meta?.includes('pure') ||
+          (!node.meta?.includes('preview') && defaultRenderMode === 'pure')
         ) {
           return;
         }
-        const value = injectDemoBlockImport(
-          previewCodeTransform({
-            language: node.lang,
-            code: node.value,
-          }),
-          demoBlockComponentPath,
-        );
+        const isJsx = node.lang === 'jsx' || node.lang === 'tsx';
+        const value = isJsx
+          ? injectDemoBlockImport(
+              previewCodeTransform({
+                language: node.lang,
+                code: node.value,
+              }),
+              demoBlockComponentPath,
+            )
+          : previewCodeTransform({
+              language: node.lang,
+              code: node.value,
+            });
 
         // every code block can change their preview mode by meta
         const isMobileMode =
-          node?.meta?.includes('mobile') ||
-          node?.meta?.includes('iframe') ||
-          (!node?.meta?.includes('web') &&
-            !node?.meta?.includes('internal') &&
+          node.meta?.includes('mobile') ||
+          node.meta?.includes('iframe') ||
+          (!node.meta?.includes('web') &&
+            !node.meta?.includes('internal') &&
             previewMode === 'iframe');
 
         const id = generateId(pageName, index++);
-        const virtualModulePath = join(virtualDir, `${id}.tsx`);
+        const virtualModulePath = join(
+          virtualDir,
+          `${id}.${getLangFileExt(node.lang)}`,
+        );
         constructDemoNode(id, virtualModulePath, node, isMobileMode);
         // Only when the content of the file changes, the file will be written
         // Avoid to trigger the hmr indefinitely

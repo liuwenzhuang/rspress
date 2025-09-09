@@ -1,24 +1,22 @@
-import type { PageIndexInfo, RemotePageInfo } from '@rspress/shared';
-import { normalizeHrefInRuntime as normalizeHref } from '@rspress/runtime';
+import type { Header, PageIndexInfo, RemotePageInfo } from '@rspress/shared';
 import {
   LOCAL_INDEX,
   type NormalizedSearchResultItem,
   type Provider,
 } from './Provider';
-import {
-  backTrackHeaders,
-  byteToCharIndex,
-  getStrByteLength,
-  normalizeTextCase,
-} from './util';
 import { LocalProvider } from './providers/LocalProvider';
-import { RemoteProvider } from './providers/RemoteProvider';
 import {
   type DefaultMatchResultItem,
   type MatchResult,
   RenderType,
   type SearchOptions,
 } from './types';
+import {
+  backTrackHeaders,
+  byteToCharIndex,
+  getStrByteLength,
+  normalizeTextCase,
+} from './util';
 
 const THRESHOLD_CONTENT_LENGTH = 100;
 
@@ -31,24 +29,21 @@ export class PageSearcher {
 
   constructor(options: SearchOptions & { indexName?: string }) {
     this.#options = options;
-    this.#indexName = options.indexName;
-    switch (options.mode) {
-      case 'remote':
-        this.#provider = new RemoteProvider();
-        break;
-      default:
-        this.#provider = new LocalProvider();
-        break;
-    }
+    this.#indexName = options.indexName ?? LOCAL_INDEX;
+    this.#provider = new LocalProvider();
   }
 
   async init() {
     await this.#provider?.init(this.#options);
   }
 
+  async fetchSearchIndex() {
+    return this.#provider?.fetchSearchIndex(this.#options);
+  }
+
   async match(keyword: string, limit = 7) {
     const searchResult = await this.#provider?.search({ keyword, limit });
-    const normaizedKeyWord = normalizeTextCase(keyword);
+    const normalizedKeyWord = normalizeTextCase(keyword);
     const currentIndexInfo = searchResult?.find(res =>
       this.#isCurrentIndex(res.index),
     ) || {
@@ -61,14 +56,14 @@ export class PageSearcher {
       {
         group: this.#indexName,
         renderType: RenderType.Default,
-        result: this.#matchResultItem(normaizedKeyWord, currentIndexInfo),
+        result: this.#matchResultItem(normalizedKeyWord, currentIndexInfo),
       },
       ...(
         searchResult?.filter(res => !this.#isCurrentIndex(res.index)) || []
       ).map(res => ({
         group: res.index,
         renderType: RenderType.Default,
-        result: this.#matchResultItem(normaizedKeyWord, res),
+        result: this.#matchResultItem(normalizedKeyWord, res),
       })),
     ];
 
@@ -76,26 +71,26 @@ export class PageSearcher {
   }
 
   #matchResultItem(
-    normaizedKeyWord: string,
+    normalizedKeyWord: string,
     resultItem: NormalizedSearchResultItem,
   ) {
     const matchedResult: DefaultMatchResultItem[] = [];
     resultItem?.hits.forEach(item => {
       // Title Match
-      this.#matchTitle(item, normaizedKeyWord, matchedResult);
+      this.#matchTitle(item, normalizedKeyWord, matchedResult);
       // Header match
-      const matchedHeader = this.#matchHeader(
+      const matchHeaderSet = this.#matchHeader(
         item,
-        normaizedKeyWord,
+        normalizedKeyWord,
         matchedResult,
       );
-      // If we have matched header, we don't need to match content
-      // Because the header is already in the content
-      if (matchedHeader) {
-        return;
-      }
       // Content match
-      this.#matchContent(item, normaizedKeyWord, matchedResult);
+      this.#matchContent(
+        item,
+        normalizedKeyWord,
+        matchedResult,
+        matchHeaderSet,
+      );
     });
     return matchedResult;
   }
@@ -112,7 +107,7 @@ export class PageSearcher {
         type: 'title',
         title,
         header: title,
-        link: `${item.domain}${normalizeHref(item.routePath)}`,
+        link: item.routePath,
         query,
         highlightInfoList: [
           {
@@ -120,7 +115,6 @@ export class PageSearcher {
             length: getStrByteLength(query),
           },
         ],
-        group: this.#options.extractGroupName(item.routePath),
       });
       return true;
     }
@@ -131,8 +125,12 @@ export class PageSearcher {
     item: PageIndexInfo,
     query: string,
     matchedResult: DefaultMatchResultItem[],
-  ): boolean {
-    const { toc = [], domain = '', title = '' } = item;
+  ) {
+    /**
+     * 记录当前匹配到的 header，用于过滤后续的 content 匹配
+     */
+    const matchHeaderSet = new WeakSet<Header>();
+    const { toc = [], title = '' } = item;
     for (const [index, header] of toc.entries()) {
       const normalizedHeader = normalizeTextCase(header.text);
       if (normalizedHeader.includes(query)) {
@@ -154,22 +152,22 @@ export class PageSearcher {
               length: getStrByteLength(query),
             },
           ],
-          link: `${domain}${normalizeHref(item.routePath)}#${header.id}`,
+          link: `${item.routePath}#${header.id}`,
           query,
-          group: this.#options.extractGroupName(item.routePath),
         });
-        return true;
+        matchHeaderSet.add(header);
       }
     }
-    return false;
+    return matchHeaderSet;
   }
 
   #matchContent(
     item: PageIndexInfo,
     query: string,
     matchedResult: DefaultMatchResultItem[],
+    matchHeaderSet?: WeakSet<Header>,
   ) {
-    const { content, toc, domain } = item;
+    const { content, toc } = item;
     if (!content.length) {
       return;
     }
@@ -190,17 +188,25 @@ export class PageSearcher {
       });
       return toc[currentHeaderIndex];
     };
+
+    const isHeaderMatched = (header: Header) =>
+      header && matchHeaderSet?.has(header);
+
     if (queryIndex === -1) {
       // In case fuzzy search
       // We get the matched content position from server response
-      const hightlightItems = (item as RemotePageInfo)._matchesPosition
-        ?.content;
-      if (!hightlightItems?.length) {
+      const highlightItems = (item as RemotePageInfo)._matchesPosition?.content;
+      if (!highlightItems?.length) {
         return;
       }
       const highlightStartIndex = (item as RemotePageInfo)._matchesPosition
         .content[0].start;
       const currentHeader = getCurrentHeader(highlightStartIndex);
+
+      if (isHeaderMatched(currentHeader)) {
+        return;
+      }
+
       const statementStartIndex = byteToCharIndex(content, highlightStartIndex);
       const statementEndIndex = byteToCharIndex(
         content,
@@ -230,12 +236,9 @@ export class PageSearcher {
         type: 'content',
         title: item.title,
         header: currentHeader?.text ?? item.title,
-        link: `${domain}${normalizeHref(item.routePath)}${
-          currentHeader ? `#${currentHeader.id}` : ''
-        }`,
+        link: `${item.routePath}${currentHeader ? `#${currentHeader.id}` : ''}`,
         query,
         highlightInfoList,
-        group: this.#options.extractGroupName(item.routePath),
         statement: `...${statement}...`,
       });
       return;
@@ -260,18 +263,21 @@ export class PageSearcher {
           length: getStrByteLength(query),
         },
       ];
-      matchedResult.push({
-        type: 'content',
-        title: item.title,
-        header: currentHeader?.text ?? item.title,
-        statement,
-        highlightInfoList,
-        link: `${domain}${normalizeHref(item.routePath)}${
-          currentHeader ? `#${currentHeader.id}` : ''
-        }`,
-        query,
-        group: this.#options.extractGroupName(item.routePath),
-      });
+      if (!isHeaderMatched(currentHeader)) {
+        matchedResult.push({
+          type: 'content',
+          title: item.title,
+          header: currentHeader?.text ?? item.title,
+          statement,
+          highlightInfoList,
+          link: `${item.routePath}${
+            currentHeader ? `#${currentHeader.id}` : ''
+          }`,
+          query,
+        });
+        // 同一区块只匹配一次
+        currentHeader && matchHeaderSet?.add(currentHeader);
+      }
       queryIndex = normalizedContent.indexOf(
         query,
         queryIndex + statement.length - highlightIndex,

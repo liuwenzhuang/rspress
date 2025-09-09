@@ -1,5 +1,5 @@
-import type { RouteMeta } from '@rspress/shared';
 import type { RsbuildConfig } from '@rsbuild/core';
+import type { RouteMeta } from '@rspress/core';
 
 export type Options = {
   /**
@@ -15,7 +15,7 @@ export type Options = {
   /**
    * internal mode: component will be rendered inside the documentation, only support react.
    *
-   * inframe mode: component will be rendered in iframe, note that aside will hide.
+   * iframe mode: component will be rendered in iframe, note that aside will hide.
    * @default 'internal'
    */
   previewMode?: 'internal' | 'iframe';
@@ -58,7 +58,16 @@ export type IframeOptions = {
    */
   devPort?: number;
   builderConfig?: RsbuildConfig;
+  /**
+   * custom support for other web frameworks
+   */
+  customEntry?: (meta: CustomEntry) => string;
 };
+
+export interface CustomEntry {
+  entryCssPath: string;
+  demoPath: string;
+}
 
 export type RemarkPluginOptions = Required<
   Pick<

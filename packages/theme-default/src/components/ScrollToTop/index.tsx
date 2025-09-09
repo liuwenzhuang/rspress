@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import styles from './index.module.scss';
+import { useEffect, useState } from 'react';
+import * as styles from './index.module.scss';
 
 export function ScrollToTop() {
   const [isVisible, setIsVisible] = useState(false);
@@ -29,7 +29,7 @@ export function ScrollToTop() {
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         fill="currentColor"
-        className="w-6 h-6"
+        className="rp-w-6 rp-h-6"
       >
         <path
           fillRule="evenodd"

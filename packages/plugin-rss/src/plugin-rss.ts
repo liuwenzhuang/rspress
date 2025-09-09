@@ -1,16 +1,14 @@
+/// <reference path="../index.d.ts" />
+
 import NodePath from 'node:path';
 import { resolve as resolveUrl } from 'node:url';
-import type { PageIndexInfo, RspressPlugin, UserConfig } from '@rspress/shared';
+import type { PageIndexInfo, RspressPlugin, UserConfig } from '@rspress/core';
+import { getIconUrlPath } from '@rspress/core';
 import { Feed } from 'feed';
-import { PluginComponents, PluginName } from './exports';
-import { createFeed, generateFeedItem } from './feed';
 
-import {
-  type PageWithFeeds,
-  type ResolvedOutput,
-  concatArray,
-  writeFile,
-} from './internals';
+import { createFeed, generateFeedItem } from './createFeed';
+import { PluginComponents, PluginName } from './exports';
+import { concatArray, type ResolvedOutput, writeFile } from './internals';
 import { getDefaultFeedOption, getOutputInfo, testPage } from './options';
 import type { FeedChannel, FeedItem, PluginRssOptions } from './type';
 
@@ -26,7 +24,7 @@ class FeedsSet {
     ).map(options => ({
       title: config.title || '',
       description: config.description || '',
-      favicon: config.icon && resolveUrl(siteUrl, config.icon),
+      favicon: config.icon && resolveUrl(siteUrl, getIconUrlPath(config.icon)),
       copyright: config.themeConfig?.footer?.message || '',
       link: siteUrl,
       docs: '',
@@ -52,19 +50,14 @@ class FeedsSet {
 function getRssItems(
   feeds: TransformedFeedChannel[],
   page: PageIndexInfo,
-  config: UserConfig,
   siteUrl: string,
 ): Promise<FeedItemWithChannel[]> {
   return Promise.all(
     feeds
-      .filter(options => testPage(options.test, page, config.base))
+      .filter(options => testPage(options.test, page))
       .map(async options => {
         const after = options.item || ((feed: FeedItem) => feed);
-        const item = await after(
-          generateFeedItem(page, siteUrl),
-          page,
-          siteUrl,
-        );
+        const item = await after(generateFeedItem(page, siteUrl), page);
         return { ...item, channel: options.id };
       }),
   );
@@ -81,7 +74,6 @@ export function pluginRss(pluginRssOptions: PluginRssOptions): RspressPlugin {
     string,
     PromiseLike<FeedItemWithChannel[]>
   > = null;
-  let _config: null | UserConfig;
 
   return {
     name: PluginName,
@@ -92,26 +84,18 @@ export function pluginRss(pluginRssOptions: PluginRssOptions): RspressPlugin {
         return;
       }
       _rssWorkaround = {};
-      _config = config;
       feedsSet.set(pluginRssOptions, config);
     },
-    async extendPageData(_pageData) {
+    async extendPageData(pageData) {
       if (!_rssWorkaround) return;
-
-      const pageData = _pageData as PageWithFeeds;
 
       // rspress run `extendPageData` for each page
       //   - let's cache rss items within a complete rspress build
-      _rssWorkaround[pageData.id] =
-        _rssWorkaround[pageData.id] ||
-        getRssItems(
-          feedsSet.get(),
-          pageData,
-          _config!,
-          pluginRssOptions.siteUrl,
-        );
+      _rssWorkaround[pageData.routePath] =
+        _rssWorkaround[pageData.routePath] ||
+        getRssItems(feedsSet.get(), pageData, pluginRssOptions.siteUrl);
 
-      const feeds = await _rssWorkaround[pageData.id];
+      const feeds = await _rssWorkaround[pageData.routePath];
       const showRssList = new Set(
         concatArray(pageData.frontmatter['link-rss'] as string[] | string),
       );
@@ -154,7 +138,6 @@ export function pluginRss(pluginRssOptions: PluginRssOptions): RspressPlugin {
         await writeFile(path, output.getContent(feed));
       }
       _rssWorkaround = null;
-      _config = null;
     },
   };
 }

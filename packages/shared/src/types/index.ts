@@ -1,14 +1,16 @@
-import type { RsbuildConfig, RsbuildPlugin } from '@rsbuild/core';
+import type { loadConfig, RsbuildConfig } from '@rsbuild/core';
+import type { RehypeShikiOptions } from '@shikijs/rehype';
 import type { ZoomOptions } from 'medium-zoom';
 import type { PluggableList } from 'unified';
-import type { AdditionalPage, RspressPlugin } from './Plugin';
 import type {
   Config as DefaultThemeConfig,
   NormalizedConfig as NormalizedDefaultThemeConfig,
 } from './defaultTheme';
+import type { AdditionalPage, RspressPlugin } from './Plugin';
 
 export type { DefaultThemeConfig, NormalizedDefaultThemeConfig };
 export * from './defaultTheme';
+export * from './helpers';
 
 export type { RspressPlugin, AdditionalPage, RspressPlugin as Plugin };
 
@@ -49,11 +51,10 @@ export interface Locale {
   description?: string;
 }
 
-export type SSGConfig = boolean | { strict?: boolean };
-
 export interface UserConfig<ThemeConfig = DefaultThemeConfig> {
   /**
    * The root directory of the site.
+   * @default 'docs'
    */
   root?: string;
   /**
@@ -62,26 +63,30 @@ export interface UserConfig<ThemeConfig = DefaultThemeConfig> {
   logo?: string | { dark: string; light: string };
   /**
    * The text of the logo in nav bar.
+   * @default ''
    */
   logoText?: string;
   /**
    * Base path of the site.
+   * @default '/'
    */
   base?: string;
   /**
    * Path to html icon file.
    */
-  icon?: string;
+  icon?: string | URL;
   /**
-   * Language of the site.
+   * Default language of the site.
    */
   lang?: string;
   /**
    * Title of the site.
+   * @default 'Rspress'
    */
   title?: string;
   /**
    * Description of the site.
+   * @default ''
    */
   description?: string;
   /**
@@ -147,11 +152,26 @@ export interface UserConfig<ThemeConfig = DefaultThemeConfig> {
    */
   search?: SearchOptions;
   /**
-   * Whether to enable ssg, default is true
+   * Whether to enable ssg
+   * @default true
    */
-  ssg?: SSGConfig;
+  ssg?:
+    | boolean
+    | {
+        /**
+         * After enabled, you can use worker to accelerate the SSG process and reduce memory usage. It is suitable for large document sites and is based on [tinypool](https://github.com/tinylibs/tinypool).
+         * @default false
+         */
+        experimentalWorker?: boolean;
+        /**
+         * After enabled, some pages will not be rendered by SSG, and they will directly use html under CSR. This is suitable for SSG errors in large document sites bypassing a small number of pages. It is not recommended to enable this option actively.
+         * @default []
+         */
+        experimentalExcludeRoutePaths?: (string | RegExp)[];
+      };
   /**
-   * Whether to enable medium-zoom, default is true
+   * Whether to enable medium-zoom
+   * @default true
    */
   mediumZoom?:
     | boolean
@@ -159,10 +179,6 @@ export interface UserConfig<ThemeConfig = DefaultThemeConfig> {
         selector?: string;
         options?: ZoomOptions;
       };
-  /**
-   * Add some extra builder plugins
-   */
-  builderPlugins?: RsbuildPlugin[];
   /**
    * Multi version config
    */
@@ -176,15 +192,51 @@ export interface UserConfig<ThemeConfig = DefaultThemeConfig> {
      */
     versions: string[];
   };
+  /**
+   * Language parity checking config
+   */
+  languageParity?: {
+    /**
+     * Whether to enable language parity checking
+     */
+    enabled?: boolean;
+    /**
+     * Directories to include in the parity check
+     */
+    include?: string[];
+    /**
+     * Directories to exclude from the parity check
+     */
+    exclude?: string[];
+  };
 }
 
+type RemoveUnderscoreProps<T> = {
+  [K in keyof T as K extends `_${string}` ? never : K]: T[K];
+};
+
 export type BaseRuntimePageInfo = Omit<
-  PageIndexInfo,
+  RemoveUnderscoreProps<PageIndexInfo>,
   'id' | 'content' | 'domain'
 >;
 
+export interface PageData {
+  pages: BaseRuntimePageInfo[];
+}
+
+export interface PageDataLegacy {
+  siteData: SiteData<DefaultThemeConfig> & { pages: BaseRuntimePageInfo[] };
+  page: BaseRuntimePageInfo & {
+    headingTitle?: string;
+    pagePath: string;
+    lastUpdatedTime?: string;
+    description?: string;
+    pageType: PageType;
+    [key: string]: unknown;
+  };
+}
+
 export interface SiteData<ThemeConfig = NormalizedDefaultThemeConfig> {
-  root: string;
   base: string;
   lang: string;
   route: RouteOptions;
@@ -195,13 +247,11 @@ export interface SiteData<ThemeConfig = NormalizedDefaultThemeConfig> {
   themeConfig: ThemeConfig;
   logo: string | { dark: string; light: string };
   logoText: string;
-  pages: BaseRuntimePageInfo[];
   search: SearchOptions;
-  ssg: boolean;
   markdown: {
     showLineNumbers: boolean;
     defaultWrapCode: boolean;
-    codeHighlighter: 'prism' | 'shiki';
+    shiki: Partial<RehypeShikiOptions>;
   };
   multiVersion: {
     default: string;
@@ -209,19 +259,27 @@ export interface SiteData<ThemeConfig = NormalizedDefaultThemeConfig> {
   };
 }
 
-export type PageIndexInfo = {
-  id: number;
-  title: string;
+/**
+ * @description search-index.json file
+ * "_foo" is the private field that won't be written to search-index.json file
+ * and should not be used in the runtime (usePageData).
+ */
+export interface PageIndexInfo {
+  // can be used as id
   routePath: string;
+
+  title: string;
   toc: Header[];
   content: string;
-  frontmatter: Record<string, unknown>;
+  _flattenContent?: string;
+  /* html content is too large to be written to index file */
+  _html: string;
+  frontmatter: FrontMatterMeta;
   lang: string;
   version: string;
-  domain: string;
   _filepath: string;
   _relativePath: string;
-};
+}
 
 export type RemotePageInfo = PageIndexInfo & {
   _matchesPosition: {
@@ -280,23 +338,12 @@ export interface FrontMatterMeta {
   sidebar?: boolean;
   outline?: boolean;
   lineNumbers?: boolean;
-  overviewHeaders?: number;
+  overviewHeaders?: number[];
   titleSuffix?: string;
   head?: [string, Record<string, string>][];
   context?: string;
+  footer?: boolean;
   [key: string]: unknown;
-}
-
-export interface PageData {
-  siteData: SiteData<DefaultThemeConfig>;
-  page: BaseRuntimePageInfo & {
-    pagePath: string;
-    lastUpdatedTime?: string;
-    description?: string;
-    pageType: PageType;
-    _relativePath: string;
-    [key: string]: unknown;
-  };
 }
 
 export interface RouteOptions {
@@ -307,14 +354,22 @@ export interface RouteOptions {
   extensions?: string[];
   /**
    * Include extra files from being converted to routes
+   * @default []
    */
   include?: string[];
   /**
    * Exclude files from being converted to routes
+   * @default []
    */
   exclude?: string[];
   /**
+   * Exclude convention files from being converted to routes
+   * @default ['**\/_[^_]*']
+   */
+  excludeConvention?: string[];
+  /**
    * use links without .html files
+   * @default false
    */
   cleanUrls?: boolean;
 }
@@ -332,43 +387,38 @@ export type LocalSearchOptions = SearchHooks & {
    * Whether to generate separate search index for each version
    */
   versioned?: boolean;
-};
-
-export type RemoteSearchIndexInfo =
-  | string
-  | {
-      value: string;
-      label: string;
-    };
-
-export type RemoteSearchOptions = SearchHooks & {
-  mode: 'remote';
-  apiUrl: string;
-  domain?: string;
-  indexName: string;
-  searchIndexes?: RemoteSearchIndexInfo[];
-  searchLoading?: boolean;
-};
-
-export type SearchOptions = LocalSearchOptions | RemoteSearchOptions | false;
-
-export interface MdxRsOptions {
   /**
-   * Determine whether the file use mdxRs compiler
+   * If enabled, the search index will include code block content, which allows users to search code blocks.
+   * @default true
    */
-  include?: (filepath: string) => boolean;
-}
+  codeBlocks?: boolean;
+};
+
+export type SearchOptions = LocalSearchOptions | false;
+
+export type RemarkLinkOptions = {
+  /**
+   * Whether to enable check dead links
+   * @default true
+   */
+  checkDeadLinks?:
+    | boolean
+    | { excludes: string[] | ((url: string) => boolean) };
+  /**
+   * [](/v3/zh/guide) [](/zh/guide) [](/guide) will be regarded as the same [](/v3/zh/guide) according to the directory.
+   * @default true
+   */
+  autoPrefix?: boolean;
+};
 
 export interface MarkdownOptions {
   remarkPlugins?: PluggableList;
   rehypePlugins?: PluggableList;
-  /**
-   * Whether to enable check dead links, default is false
-   */
-  checkDeadLinks?: boolean;
+  link?: RemarkLinkOptions;
   showLineNumbers?: boolean;
   /**
-   * Whether to wrap code by default, default is false
+   * Whether to wrap code by default
+   * @default false
    */
   defaultWrapCode?: boolean;
   /**
@@ -376,24 +426,20 @@ export interface MarkdownOptions {
    */
   globalComponents?: string[];
   /**
-   * Code highlighter, default is prism for performance reason
+   * @type import('@shikijs/rehype').RehypeShikiOptions
    */
-  codeHighlighter?: 'prism' | 'shiki';
+  shiki?: Partial<RehypeShikiOptions>;
+
   /**
-   * Register prism languages
+   * Speed up build time by caching mdx parsing result in `rspress build`
+   * @default true
    */
-  highlightLanguages?: (string | [string, string])[];
-  /**
-   * Whether to enable mdx-rs, default is true
-   */
-  mdxRs?: boolean | MdxRsOptions;
-  /**
-   * @deprecated, use `mdxRs` instead
-   */
-  experimentalMdxRs?: boolean;
+  crossCompilerCache?: boolean;
 }
 
 export type Config =
   | UserConfig
   | Promise<UserConfig>
-  | ((env: any) => UserConfig | Promise<UserConfig>);
+  | ((
+      ...args: Parameters<typeof loadConfig>
+    ) => UserConfig | Promise<UserConfig>);

@@ -1,14 +1,23 @@
-import { useState } from 'react';
 import { MDXProvider } from '@mdx-js/react';
-import { getCustomMDXComponent, ScrollToTop, Overview } from '@theme';
-import { Content, usePageData, NoSSR } from '@rspress/runtime';
+import {
+  Content,
+  NoSSR,
+  useLocaleSiteData,
+  usePageData,
+} from '@rspress/runtime';
+import { getCustomMDXComponent, Overview, ScrollToTop } from '@theme';
+import { slug } from 'github-slugger';
+import { useMemo, useState } from 'react';
 import { Aside } from '../../components/Aside';
+import { useWatchToc } from '../../components/Aside/useDynamicToc';
 import { DocFooter } from '../../components/DocFooter';
-import { useLocaleSiteData } from '../../logic';
-import { SideMenu } from '../../components/LocalSideBar';
+import { Sidebar } from '../../components/Sidebar';
+import { SidebarMenu } from '../../components/SidebarMenu';
 import { TabDataContext } from '../../logic/TabDataContext';
-import styles from './index.module.scss';
 import type { UISwitchResult } from '../../logic/useUISwitch';
+import { A } from './docComponents/a';
+import { H1 } from './docComponents/title';
+import * as styles from './index.module.scss';
 
 export interface DocLayoutProps {
   beforeSidebar?: React.ReactNode;
@@ -22,6 +31,8 @@ export interface DocLayoutProps {
   beforeOutline?: React.ReactNode;
   afterOutline?: React.ReactNode;
   uiSwitch?: UISwitchResult;
+  navTitle?: React.ReactNode;
+  components?: Record<string, React.FC>;
 }
 
 export function DocLayout(props: DocLayoutProps) {
@@ -37,11 +48,12 @@ export function DocLayout(props: DocLayoutProps) {
     beforeSidebar,
     afterSidebar,
     uiSwitch,
+    navTitle,
+    components,
   } = props;
   const { siteData, page } = usePageData();
-  const { toc = [], frontmatter } = page;
+  const { headingTitle, title, frontmatter } = page;
   const [tabData, setTabData] = useState({});
-  const headers = toc;
   const { themeConfig } = siteData;
   const enableScrollToTop = themeConfig.enableScrollToTop ?? false;
   const localesData = useLocaleSiteData();
@@ -50,77 +62,106 @@ export function DocLayout(props: DocLayoutProps) {
     localesData?.outlineTitle || themeConfig?.outlineTitle || 'ON THIS PAGE';
   const isOverviewPage = frontmatter?.overview ?? false;
 
+  const mdxComponents = { ...getCustomMDXComponent(), ...components };
+
   const docContent = (
     <TabDataContext.Provider value={{ tabData, setTabData }}>
-      <MDXProvider components={getCustomMDXComponent()}>
+      <MDXProvider components={mdxComponents}>
         <Content />
       </MDXProvider>
     </TabDataContext.Provider>
   );
 
+  const fallbackTitle = useMemo(() => {
+    const titleSlug = title && slug(title);
+    return (
+      siteData.themeConfig.fallbackHeadingTitle !== false &&
+      !headingTitle &&
+      titleSlug && (
+        <H1 id={titleSlug}>
+          {title}
+          <A className="header-anchor" href={`#${titleSlug}`} aria-hidden>
+            #
+          </A>
+        </H1>
+      )
+    );
+  }, [headingTitle, title, siteData.themeConfig.fallbackHeadingTitle]);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const rspressDocRef = useWatchToc();
+
   return (
     <div
-      className={`${styles.docLayout} pt-0`}
+      className={`${styles.docLayout} rp-pt-0`}
       style={{
-        ...(uiSwitch.showNavbar ? {} : { marginTop: 0 }),
+        ...(uiSwitch?.showNavbar ? {} : { marginTop: 0 }),
       }}
     >
       {beforeDoc}
-      <SideMenu
-        outlineTitle={outlineTitle}
-        beforeSidebar={beforeSidebar}
-        afterSidebar={afterSidebar}
-        uiSwitch={uiSwitch}
-      />
-      <div
-        className={`${styles.content} rspress-doc-container flex flex-shrink-0 mx-auto`}
-      >
-        <div className="w-full flex-1">
-          {isOverviewPage ? (
-            <>
-              {beforeDocContent}
-              <Overview content={docContent} />
-              {afterDocContent}
-            </>
-          ) : (
-            <div>
-              <div className="rspress-doc">
+      {uiSwitch?.showSidebar && (
+        <Sidebar
+          isSidebarOpen={isSidebarOpen}
+          beforeSidebar={beforeSidebar}
+          afterSidebar={afterSidebar}
+          uiSwitch={uiSwitch}
+          navTitle={navTitle}
+        />
+      )}
+      <div className="rp-flex-1 rp-relative rp-min-w-0">
+        <SidebarMenu
+          isSidebarOpen={isSidebarOpen}
+          onIsSidebarOpenChange={setIsSidebarOpen}
+          outlineTitle={outlineTitle}
+          uiSwitch={uiSwitch}
+        />
+        <div className={`${styles.content} rspress-doc-container rp-flex`}>
+          <div
+            className={`rp-flex-1 ${isOverviewPage ? '' : 'rp-overflow-x-auto'}`}
+          >
+            {isOverviewPage ? (
+              <>
                 {beforeDocContent}
-                {docContent}
+                <Overview content={docContent} />
                 {afterDocContent}
-              </div>
-              <div className="rspress-doc-footer">
-                {beforeDocFooter}
-                {uiSwitch.showDocFooter && <DocFooter />}
-                {afterDocFooter}
-              </div>
+              </>
+            ) : (
+              <>
+                <div className="rspress-doc" ref={rspressDocRef}>
+                  {beforeDocContent}
+                  {fallbackTitle}
+                  {docContent}
+                  {afterDocContent}
+                </div>
+                <div className="rspress-doc-footer">
+                  {beforeDocFooter}
+                  {uiSwitch?.showDocFooter && <DocFooter />}
+                  {afterDocFooter}
+                </div>
+              </>
+            )}
+          </div>
+          {enableScrollToTop && (
+            <NoSSR>
+              <ScrollToTop />
+            </NoSSR>
+          )}
+          {uiSwitch?.showAside && (
+            <div
+              className={styles.asideContainer}
+              style={
+                uiSwitch?.showNavbar
+                  ? undefined
+                  : { marginTop: 0, paddingTop: '32px' }
+              }
+            >
+              {beforeOutline}
+              <Aside outlineTitle={outlineTitle} />
+              {afterOutline}
             </div>
           )}
         </div>
-        {enableScrollToTop && (
-          <NoSSR>
-            <ScrollToTop />
-          </NoSSR>
-        )}
-        {uiSwitch.showAside ? (
-          <div
-            className={styles.asideContainer}
-            style={{
-              ...(uiSwitch.showNavbar
-                ? {}
-                : {
-                    marginTop: 0,
-                    paddingTop: '32px',
-                  }),
-            }}
-          >
-            <div>
-              {beforeOutline}
-              <Aside headers={headers} outlineTitle={outlineTitle} />
-              {afterOutline}
-            </div>
-          </div>
-        ) : null}
       </div>
       {afterDoc}
     </div>

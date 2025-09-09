@@ -4,7 +4,22 @@
 :root {
   --rp-nav-height: 72px;
   --rp-sidebar-width: 320px;
+  --rp-sidebar-menu-height: 46px;
   --rp-aside-width: 268px;
+  --rp-content-padding-x: 24px;
+  --rp-content-padding-y: 48px;
+}
+
+@media (max-width: 768px) {
+  html:root {
+    --rp-nav-height: 56px;
+  }
+}
+
+@media (min-width: 1280px) {
+  html:root {
+    --rp-sidebar-menu-height: 0px;
+  }
 }
 
 :root {
@@ -15,7 +30,7 @@
   --rp-c-divider: rgba(60, 60, 60, 0.29);
   --rp-c-divider-light: rgba(60, 60, 60, 0.1);
 
-  --rp-c-text-1: #213547;
+  --rp-c-text-1: #242424;
   --rp-c-text-2: rgba(60, 60, 60, 0.66);
   --rp-c-text-3: rgba(60, 60, 60, 0.33);
   --rp-c-text-4: rgba(60, 60, 60, 0.18);
@@ -52,7 +67,7 @@
 }
 
 .dark {
-  --rp-c-bg: #23272f;
+  --rp-c-bg: #191d24;
   --rp-c-bg-soft: #292e37;
   --rp-c-bg-mute: #343a46;
   --rp-c-bg-alt: #000;
@@ -60,7 +75,7 @@
   --rp-c-divider: rgba(84, 84, 84, 0.65);
   --rp-c-divider-light: rgba(84, 84, 84, 0.48);
 
-  --rp-c-text-1: rgba(255, 255, 255, 0.87);
+  --rp-c-text-1: rgba(255, 255, 245, 0.93);
   --rp-c-text-2: rgba(235, 235, 235, 0.56);
   --rp-c-text-3: rgba(235, 235, 235, 0.38);
   --rp-c-text-4: rgba(235, 235, 235, 0.18);
@@ -83,5 +98,33 @@
   --rp-shadow-2: 0 3px 12px rgba(0, 0, 0, 0.07), 0 1px 4px rgba(0, 0, 0, 0.07);
   --rp-shadow-3: 0 12px 32px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.08);
   --rp-shadow-4: 0 14px 44px rgba(0, 0, 0, 0.12), 0 3px 9px rgba(0, 0, 0, 0.12);
-  --rp-shadow-5: 0 18px 56px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.16);
+  --rp-shadow-5:
+    0 18px 56px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+
+/* HomeLayout */
+:root {
+  --rp-home-hero-name-color: transparent;
+  --rp-home-hero-name-background: -webkit-linear-gradient(
+    120deg,
+    var(--rp-c-brand) 30%,
+    #42d392
+  );
+  --rp-home-hero-image-background-image: none;
+  --rp-home-hero-image-filter: none;
+  --rp-home-feature-bg: var(--rp-c-bg-soft);
+  --rp-home-mask-background-image: conic-gradient(
+    from 180deg at 50% 50%,
+    var(--rp-c-brand) 0deg,
+    180deg,
+    #42d392 1turn
+  );
+  --rp-home-hero-image-width-sm: 250px;
+  --rp-home-hero-image-width: 375px;
+  --rp-home-hero-text-max-width: 40rem;
+}
+
+.dark {
+  --rp-home-bg: #000;
+  --rp-home-feature-bg: var(--rp-c-bg-soft);
 }

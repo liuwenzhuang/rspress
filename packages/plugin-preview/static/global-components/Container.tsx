@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { withBase, useLang, NoSSR, usePageData } from '@rspress/core/runtime';
+import { NoSSR, useLang, usePageData, withBase } from '@rspress/core/runtime';
+import { type MouseEvent, useCallback, useState } from 'react';
 import MobileOperation from './common/mobile-operation';
 import IconCode from './icons/Code';
 
@@ -26,12 +26,15 @@ const Container: React.FC<ContainerProps> = props => {
     // Do nothing in ssr
     return '';
   };
-  const toggleCode = (e: any) => {
-    if (!showCode) {
-      e.target.blur();
-    }
-    setShowCode(!showCode);
-  };
+  const toggleCode = useCallback(
+    (ev: MouseEvent<HTMLButtonElement>) => {
+      if (!showCode) {
+        ev.currentTarget.blur();
+      }
+      setShowCode(!showCode);
+    },
+    [showCode],
+  );
 
   const [iframeKey, setIframeKey] = useState(0);
   const refresh = useCallback(() => {
@@ -42,7 +45,7 @@ const Container: React.FC<ContainerProps> = props => {
     <NoSSR>
       <div className="rspress-preview">
         {isMobile === 'true' ? (
-          <div className="rspress-preview-wrapper flex">
+          <div className="rspress-preview-wrapper rp-flex">
             <div className="rspress-preview-code">{children?.[0]}</div>
             <div className="rspress-preview-device">
               <iframe src={getPageUrl()} key={iframeKey}></iframe>

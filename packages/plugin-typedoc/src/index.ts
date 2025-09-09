@@ -1,12 +1,9 @@
 import path from 'node:path';
+import type { RspressPlugin } from '@rspress/core';
 import { Application, TSConfigReader } from 'typedoc';
-import type { RspressPlugin } from '@rspress/shared';
 import { load } from 'typedoc-plugin-markdown';
 import { API_DIR } from './constants';
-import {
-  resolveSidebarForMultiEntry,
-  resolveSidebarForSingleEntry,
-} from './sidebar';
+import { patchGeneratedApiDocs } from './patch';
 
 export interface PluginTypeDocOptions {
   /**
@@ -26,14 +23,6 @@ export function pluginTypeDoc(options: PluginTypeDocOptions): RspressPlugin {
   const { entryPoints = [], outDir = API_DIR } = options;
   return {
     name: '@rspress/plugin-typedoc',
-    async addPages() {
-      return [
-        {
-          routePath: `${outDir.replace(/\/$/, '')}/`,
-          filepath: path.join(docRoot!, outDir, 'README.md'),
-        },
-      ];
-    },
     async config(config) {
       const app = new Application();
       docRoot = config.root;
@@ -48,7 +37,7 @@ export function pluginTypeDoc(options: PluginTypeDocOptions): RspressPlugin {
         githubPages: false,
         requiredToBeDocumented: ['Class', 'Function', 'Interface'],
         plugin: ['typedoc-plugin-markdown'],
-        // @ts-expect-error MarkdownTheme has no export
+        // @ts-expect-error - FIXME: current version of MarkdownTheme has no export, bump related package versions
         hideBreadcrumbs: true,
         hideMembersSymbol: true,
         allReflectionsHaveOwnDocument: true,
@@ -56,41 +45,11 @@ export function pluginTypeDoc(options: PluginTypeDocOptions): RspressPlugin {
       const project = app.convert();
 
       if (project) {
-        // 1. Generate module doc by typedoc
-        const absoluteOutputdir = path.join(docRoot!, outDir);
-        await app.generateDocs(project, absoluteOutputdir);
-        const jsonDir = path.join(absoluteOutputdir, 'documentation.json');
-        await app.generateJson(project, jsonDir);
-        // 2. Generate sidebar
-        config.themeConfig = config.themeConfig || {};
-        config.themeConfig.nav = config.themeConfig.nav || [];
-        const apiIndexLink = `/${outDir.replace(/(^\/)|(\/$)/, '')}/`;
-        const { nav } = config.themeConfig;
-        // Note: TypeDoc does not support i18n
-        if (Array.isArray(nav)) {
-          nav.push({
-            text: 'API',
-            link: apiIndexLink,
-          });
-        } else if ('default' in nav) {
-          nav.default.push({
-            text: 'API',
-            link: apiIndexLink,
-          });
-        }
-
-        config.themeConfig.sidebar = config.themeConfig.sidebar || {};
-        config.themeConfig.sidebar[apiIndexLink] =
-          entryPoints.length > 1
-            ? await resolveSidebarForMultiEntry(jsonDir)
-            : await resolveSidebarForSingleEntry(jsonDir);
-        config.themeConfig.sidebar[apiIndexLink].unshift({
-          text: 'Overview',
-          link: `${apiIndexLink}README`,
-        });
+        // 1. Generate doc/api, doc/api/_meta.json by typedoc
+        const absoluteApiDir = path.join(docRoot!, outDir);
+        await app.generateDocs(project, absoluteApiDir);
+        await patchGeneratedApiDocs(absoluteApiDir);
       }
-      config.route = config.route || {};
-      config.route.exclude = config.route.exclude || [];
       return config;
     },
   };

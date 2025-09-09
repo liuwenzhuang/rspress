@@ -1,8 +1,8 @@
+import type { Root } from 'hast';
 import type { Plugin } from 'unified';
 import { visit } from 'unist-util-visit';
-import type { Root } from 'hast';
 
-export const rehypePluginCodeMeta: Plugin<[], Root> = () => {
+export const rehypeCodeMeta: Plugin<[], Root> = () => {
   return tree => {
     visit(tree, 'element', node => {
       // <pre><code>...</code></pre>
@@ -13,9 +13,8 @@ export const rehypePluginCodeMeta: Plugin<[], Root> = () => {
         node.children[0].tagName === 'code'
       ) {
         const codeNode = node.children[0];
-        // language-foo
-        const meta = (codeNode.data?.meta as string) || '';
-        codeNode.properties.meta = meta;
+        // https://github.com/shikijs/shiki/blob/4b8e6331aca7f8cd77e280120e67933525550c36/packages/rehype/src/handlers.ts#L59C46-L59C56
+        codeNode.properties.metastring = codeNode.data?.meta;
       }
     });
   };

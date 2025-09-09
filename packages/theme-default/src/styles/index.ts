@@ -3,5 +3,9 @@
  */
 import './vars.css';
 import './base.css';
+import './tailwind.css';
 import './code.css';
 import './scrollbar.scss';
+import './shiki.scss';
+import './container.css';
+import 'nprogress/nprogress.css';

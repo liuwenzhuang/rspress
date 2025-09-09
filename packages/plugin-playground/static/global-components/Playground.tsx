@@ -1,16 +1,17 @@
-import React, {
+import { usePageData } from '@rspress/core/runtime';
+import { Editor, Runner } from '@rspress/plugin-playground/web';
+// @ts-expect-error Cannot find module _rspress_playground_imports
+import getImport from '_rspress_playground_imports';
+import {
   type HTMLAttributes,
   type ReactNode,
   useCallback,
   useState,
 } from 'react';
-import getImport from '_rspress_playground_imports';
-import { usePageData } from '@rspress/core/runtime';
-import { Editor, Runner } from '../../dist/web/esm';
 
 // inject by builder in cli/index.ts
 declare global {
-  const __PLAYGROUND_DIRECTION__: any;
+  const __PLAYGROUND_DIRECTION__: Direction;
 }
 
 type Direction = 'horizontal' | 'vertical';
@@ -45,7 +46,7 @@ function useDirection(props: PlaygroundProps): Direction {
   // inject by config
   try {
     return __PLAYGROUND_DIRECTION__;
-  } catch (e) {
+  } catch (_e) {
     // ignore
   }
 
@@ -57,7 +58,7 @@ export default function Playground(props: PlaygroundProps) {
     code: codeProp,
     language,
     className = '',
-    direction: directionProp,
+    direction: _directionProp,
     editorPosition,
     renderChildren,
     ...rest
@@ -91,6 +92,13 @@ export default function Playground(props: PlaygroundProps) {
         value={code}
         onChange={handleCodeChange}
         language={monacoLanguage}
+        beforeMount={monaco => {
+          monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+            noSemanticValidation: true,
+            noSyntaxValidation: true,
+            noSuggestionDiagnostics: true,
+          });
+        }}
       />
       {renderChildren?.(props, code, direction)}
     </div>

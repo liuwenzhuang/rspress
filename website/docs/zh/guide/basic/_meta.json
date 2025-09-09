@@ -1,0 +1,12 @@
+[
+  "conventional-route",
+  "auto-nav-sidebar",
+  {
+    "type": "dir",
+    "name": "use-mdx"
+  },
+  "static-assets",
+  "custom-page",
+  "ssg",
+  "deploy"
+]

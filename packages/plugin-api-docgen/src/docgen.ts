@@ -1,24 +1,26 @@
+import fs from 'node:fs';
 import path from 'node:path';
+import { logger, RSPRESS_TEMP_DIR } from '@rspress/core';
+import chokidar from 'chokidar';
 import type { ComponentDoc, PropItem } from 'react-docgen-typescript';
-import { logger, chokidar, fs } from '@modern-js/utils';
 import {
-  withDefaultConfig,
-  withCustomConfig,
   withCompilerOptions,
+  withCustomConfig,
+  withDefaultConfig,
 } from 'react-docgen-typescript';
-import { RSPRESS_TEMP_DIR } from '@rspress/shared';
 import { apiDocMap } from './constants';
 import { locales } from './locales';
 import type {
+  ApiParseTool,
   DocGenOptions,
   Entries,
+  SupportLanguages,
   ToolEntries,
-  ApiParseTool,
   WatchFileInfo,
 } from './types';
 
-const isToolEntries = (obj: Record<string, any>): obj is ToolEntries => {
-  return obj.documentation || obj['react-docgen-typescript'];
+const isToolEntries = (obj: Record<string, unknown>): obj is ToolEntries => {
+  return !!obj.documentation || !!obj['react-docgen-typescript'];
 };
 
 export const docgen = async ({
@@ -110,7 +112,8 @@ export const docgen = async ({
           if (e instanceof Error) {
             logger.error(
               '[module-doc-plugin]',
-              `Generate API table error: ${e.message}`,
+              'Generate API table error:\n',
+              e,
             );
           }
         }
@@ -174,7 +177,10 @@ export const docgen = async ({
   logger.success('[module-doc-plugin]', 'Generate API table successfully!');
 };
 
-function generateTable(componentDoc: ComponentDoc[], language: 'zh' | 'en') {
+function generateTable(
+  componentDoc: ComponentDoc[],
+  language: SupportLanguages,
+) {
   return componentDoc
     .map(param => {
       const { props } = param;

@@ -1,13 +1,14 @@
-import type { PageFeedData } from '@rspress/plugin-rss';
-import { Helmet, usePageData } from 'rspress/runtime';
+/// <reference path="../../index.d.ts" />
+
+import { Head, usePageData } from '@rspress/core/runtime';
 import type { LinkHTMLAttributes } from 'react';
 
 export default function FeedsAnnotations() {
   const { page } = usePageData();
-  const feeds = (page.feeds as PageFeedData[]) || [];
+  const feeds = page.feeds || [];
 
   return (
-    <Helmet>
+    <Head>
       {feeds.map(({ language, url, mime }) => {
         const props: LinkHTMLAttributes<HTMLLinkElement> = {
           rel: 'alternate',
@@ -20,6 +21,6 @@ export default function FeedsAnnotations() {
         // biome-ignore lint/correctness/useJsxKeyInIterable: no key props
         return <link {...props} />;
       })}
-    </Helmet>
+    </Head>
   );
 }

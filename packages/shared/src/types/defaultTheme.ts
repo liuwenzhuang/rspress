@@ -90,13 +90,22 @@ export interface Config {
    */
   searchSuggestedQueryText?: string;
   /**
+   * The text of overview filter
+   */
+  overview?: FilterConfig;
+  /**
    * The behavior of hiding navbar
    */
   hideNavbar?: 'always' | 'auto' | 'never';
   /**
-   * Whether to enable the animation for translation pages
+   * Whether to enable view transition animation for pages switching
    */
   enableContentAnimation?: boolean;
+  /**
+   * Whether to enable view transition animation for the theme
+   * @default false
+   */
+  enableAppearanceAnimation?: boolean;
   /**
    * Enable scroll to top button on documentation
    * @default false
@@ -106,7 +115,12 @@ export interface Config {
    * Whether to redirect to the closest locale when the user visits the site
    * @default 'auto'
    */
-  localeRedirect?: 'auto' | 'never';
+  localeRedirect?: 'auto' | 'never' | 'only-default-lang';
+  /**
+   * Whether to show the fallback heading title when the heading title is not presented but `frontmatter.title` exists
+   * @default true
+   */
+  fallbackHeadingTitle?: boolean;
 }
 
 /**
@@ -136,7 +150,18 @@ export interface LocaleConfig {
   searchPlaceholderText?: string;
   searchNoResultsText?: string;
   searchSuggestedQueryText?: string;
+  overview?: FilterConfig;
 }
+
+/**
+ * The config of filter component
+ */
+export interface FilterConfig {
+  filterNameText?: string;
+  filterPlaceholderText?: string;
+  filterNoResultText?: string;
+}
+
 // nav -----------------------------------------------------------------------
 export type Nav = NavItem[] | { [key: string]: NavItem[] };
 
@@ -187,7 +212,7 @@ export interface SidebarGroup {
   text: string;
   link?: string;
   tag?: string;
-  items: (SidebarItem | SidebarDivider | SidebarGroup | string)[];
+  items: (SidebarGroup | SidebarItem | SidebarDivider | SidebarSectionHeader)[];
   collapsible?: boolean;
   collapsed?: boolean;
   /**
@@ -273,6 +298,8 @@ export type SocialLinkIcon =
   | 'weibo'
   | 'gitlab'
   | 'X'
+  | 'bluesky'
+  | 'npm'
   | { svg: string };
 
 // footer --------------------------------------------------------------------
@@ -294,8 +321,15 @@ export interface LocaleLink {
 }
 
 // normalized config ---------------------------------------------------------
+export type SidebarData = (
+  | SidebarDivider
+  | SidebarItem
+  | SidebarSectionHeader
+  | NormalizedSidebarGroup
+)[];
+
 export interface NormalizedSidebarGroup extends Omit<SidebarGroup, 'items'> {
-  items: (SidebarDivider | SidebarItem | NormalizedSidebarGroup)[];
+  items: SidebarData;
   collapsible: boolean;
   collapsed: boolean;
 }

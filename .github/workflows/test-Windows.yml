@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        node-version: [18.x]
+        node-version: [22.x]
         os: [windows-latest] # windows-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -33,12 +33,14 @@ jobs:
           git config --system core.longpaths true
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          fetch-depth: 25
+          fetch-depth: 1
 
       - name: Install Pnpm
-        run: corepack enable
+        run: |
+          npm install -g corepack@latest --force
+          corepack enable
 
       - name: Check skip CI
         shell: bash
@@ -50,7 +52,7 @@ jobs:
 
       - name: Setup Node.js ${{ matrix.node-version }}
         if: ${{steps.skip-ci.outputs.RESULT != 'true'}}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
@@ -59,7 +61,7 @@ jobs:
         id: nx-cache
         uses: actions/cache@v4
         with:
-          path: .nx-cache
+          path: .nx/cache
           key: nx-${{ github.ref_name }}-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             nx-${{ github.ref_name }}-${{ runner.os }}
@@ -72,13 +74,17 @@ jobs:
         if: ${{steps.skip-ci.outputs.RESULT != 'true'}}
         run: pnpm run build
 
+      - name: Build Website # for test
+        if: ${{steps.skip-ci.outputs.RESULT != 'true'}}
+        run: pnpm run build:website
+
       - name: Unit Test
         if: ${{steps.skip-ci.outputs.RESULT != 'true'}}
         run: pnpm run test:unit
 
       - name: E2E Test
         if: ${{steps.skip-ci.outputs.RESULT != 'true'}}
-        run: npx playwright install --with-deps && pnpm run test:e2e
+        run: pnpm playwright install --with-deps chromium && pnpm run test:e2e
 
       - name: Upload Playwright Report
         uses: actions/upload-artifact@v4

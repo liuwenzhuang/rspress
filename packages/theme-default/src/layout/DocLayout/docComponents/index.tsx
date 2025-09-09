@@ -1,14 +1,12 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import React from 'react';
-import { H1, H2, H3, H4, H5, H6 } from './title';
-import { Ul, Ol, Li } from './list';
-import { Table, Td, Th, Tr } from './table';
-import { Hr } from './hr';
-import { A } from './link';
-import { P, Strong, Blockquote } from './paragraph';
+import { A } from './a';
 import { Code } from './code';
-import { Pre } from './pre';
+import { Hr } from './hr';
 import { Img } from './img';
+import { Li, Ol, Ul } from './list';
+import { Blockquote, P, Strong } from './paragraph';
+import { PreWithCodeButtonGroup } from './pre';
+import { Table, Td, Th, Tr } from './table';
+import { H1, H2, H3, H4, H5, H6 } from './title';
 
 export function getCustomMDXComponent() {
   return {
@@ -31,7 +29,7 @@ export function getCustomMDXComponent() {
     strong: Strong,
     a: A,
     code: Code,
-    pre: Pre,
+    pre: PreWithCodeButtonGroup,
     img: Img,
   };
 }

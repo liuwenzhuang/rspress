@@ -1,23 +1,56 @@
 import type {
-  UserConfig,
   PageIndexInfo,
-  RspressPlugin,
   RouteMeta,
+  RspressPlugin,
+  UserConfig,
 } from '@rspress/shared';
-import { isDebugMode } from '@rspress/shared';
-import { pluginContainerSyntax } from '@rspress/plugin-container-syntax';
+import { haveNavSidebarConfig } from './auto-nav-sidebar';
+import type { RouteService } from './route/RouteService';
+
+type RspressPluginHookKeys =
+  | 'beforeBuild'
+  | 'config'
+  | 'afterBuild'
+  | 'addPages'
+  | 'addRuntimeModules'
+  | 'routeGenerated'
+  | 'routeServiceGenerated'
+  | 'extendPageData'
+  | 'modifySearchIndexData';
 
 export class PluginDriver {
   #config: UserConfig;
+  #configFilePath: string;
 
   #plugins: RspressPlugin[];
 
   #isProd: boolean;
 
-  constructor(config: UserConfig, isProd: boolean) {
+  haveNavSidebarConfig = false;
+
+  static async create(
+    config: UserConfig,
+    configFilePath: string,
+    isProd: boolean,
+  ): Promise<PluginDriver> {
+    const pluginDriver = new PluginDriver(config, configFilePath, isProd);
+    await pluginDriver.init();
+    return pluginDriver;
+  }
+
+  private constructor(
+    config: UserConfig,
+    configFilePath: string,
+    isProd: boolean,
+  ) {
     this.#config = config;
+    this.#configFilePath = configFilePath;
     this.#isProd = isProd;
     this.#plugins = [];
+  }
+
+  getConfigFilePath() {
+    return this.#configFilePath;
   }
 
   // The init function is used to initialize the doc plugins and will execute before the build process.
@@ -30,47 +63,17 @@ export class PluginDriver {
       themeConfig?.lastUpdated ||
       themeConfig?.locales?.some(locale => locale.lastUpdated);
     const mediumZoomConfig = config?.mediumZoom ?? true;
-    const haveNavSidebarConfig =
-      themeConfig.nav ||
-      themeConfig.sidebar ||
-      themeConfig.locales?.[0]?.nav ||
-      themeConfig.locales?.[0]?.sidebar;
     if (enableLastUpdated) {
-      const { pluginLastUpdated } = await import(
-        '@rspress/plugin-last-updated'
-      );
+      const { pluginLastUpdated } = await import('./last-updated/index');
       this.addPlugin(pluginLastUpdated());
     }
     if (mediumZoomConfig) {
-      const { pluginMediumZoom } = await import('@rspress/plugin-medium-zoom');
+      const { pluginMediumZoom } = await import('./medium-zoom/index');
       this.addPlugin(
         pluginMediumZoom(
           typeof mediumZoomConfig === 'object' ? mediumZoomConfig : undefined,
         ),
       );
-    }
-    if (!haveNavSidebarConfig) {
-      const { pluginAutoNavSidebar } = await import(
-        '@rspress/plugin-auto-nav-sidebar'
-      );
-      this.addPlugin(pluginAutoNavSidebar());
-    }
-
-    // Support the container syntax in markdown/mdx, such as :::tip
-    this.addPlugin(pluginContainerSyntax());
-
-    if (isDebugMode()) {
-      const SourceBuildPlugin = await import(
-        // @ts-expect-error need moduleResolution: Node16, NodeNext or Bundler to get type declerations work
-        '@rspress/theme-default/node/source-build-plugin.js'
-      ).then(
-        r => r.SourceBuildPlugin,
-        () => null as never,
-      );
-
-      if (SourceBuildPlugin) {
-        this.addPlugin(SourceBuildPlugin());
-      }
     }
 
     (config.plugins || []).forEach(plugin => {
@@ -108,19 +111,29 @@ export class PluginDriver {
   async modifyConfig() {
     let config = this.#config;
 
-    for (const plugin of this.#plugins) {
+    for (let i = 0; i < this.#plugins.length; i++) {
+      const plugin = this.#plugins[i];
       if (typeof plugin.config === 'function') {
         config = await plugin.config(
           config || {},
           {
             addPlugin: this.addPlugin.bind(this),
-            removePlugin: this.removePlugin.bind(this),
+            removePlugin: (pluginName: string) => {
+              const index = this.#plugins.findIndex(
+                item => item.name === pluginName,
+              );
+              this.removePlugin(pluginName);
+              if (index <= i && index > 0) {
+                i--;
+              }
+            },
           },
           this.#isProd,
         );
       }
     }
     this.#config = config;
+    this.haveNavSidebarConfig = haveNavSidebarConfig(config);
     return this.#config;
   }
 
@@ -140,9 +153,7 @@ export class PluginDriver {
     );
   }
 
-  async modifySearchIndexData(
-    pages: PageIndexInfo[],
-  ): Promise<PageIndexInfo[]> {
+  async modifySearchIndexData(pages: PageIndexInfo[]) {
     return this._runParallelAsyncHook(
       'modifySearchIndexData',
       pages,
@@ -155,7 +166,6 @@ export class PluginDriver {
   }
 
   async addPages() {
-    // addPages hooks
     const result = await this._runParallelAsyncHook(
       'addPages',
       this.#config || {},
@@ -165,11 +175,19 @@ export class PluginDriver {
   }
 
   async routeGenerated(routes: RouteMeta[]) {
-    return this._runParallelAsyncHook('routeGenerated', routes);
+    return this._runParallelAsyncHook('routeGenerated', routes, this.#isProd);
+  }
+
+  async routeServiceGenerated(routeService: RouteService) {
+    return this._runParallelAsyncHook(
+      'routeServiceGenerated',
+      routeService,
+      this.#isProd,
+    );
   }
 
   async addRuntimeModules() {
-    const result: Record<string, string>[] = await this._runParallelAsyncHook(
+    const result = await this._runParallelAsyncHook(
       'addRuntimeModules',
       this.#config || {},
       this.#isProd,
@@ -183,47 +201,46 @@ export class PluginDriver {
     }, {});
   }
 
-  async addSSGRoutes() {
-    const result = await this._runParallelAsyncHook(
-      'addSSGRoutes',
-      this.#config || {},
-      this.#isProd,
-    );
-
-    return result.flat();
-  }
-
-  globalUIComponents(): (string | [string, object])[] {
-    const result = this.#plugins.map(plugin => {
-      return plugin.globalUIComponents || [];
-    });
-
+  globalUIComponents() {
+    const result = this.#plugins.map(plugin => plugin.globalUIComponents || []);
     return result.flat();
   }
 
   globalStyles(): string[] {
     return this.#plugins
       .filter(plugin => typeof plugin.globalStyles === 'string')
-      .map(plugin => {
-        return plugin.globalStyles;
-      });
+      .map(plugin => plugin.globalStyles) as string[];
   }
 
-  _runParallelAsyncHook(hookName: string, ...args: unknown[]) {
+  _runParallelAsyncHook<H extends RspressPluginHookKeys>(
+    hookName: H,
+    ...args: Parameters<Required<RspressPlugin>[H]>
+  ): Promise<Awaited<ReturnType<Required<RspressPlugin>[H]>>[]> {
+    // @ts-expect-error - FIXME: TS is not able to infer the correct type
     return Promise.all(
       this.#plugins
         .filter(plugin => typeof plugin[hookName] === 'function')
-        .map(plugin => {
-          return plugin[hookName](...args);
-        }),
+        .map(plugin =>
+          plugin[hookName]!(
+            // @ts-expect-error - FIXME: TS is not able to infer the correct type
+            ...args,
+          ),
+        ),
     );
   }
 
-  _runSerialAysncHook(hookName: string, ...args: unknown[]) {
+  _runSerialAsyncHook<H extends RspressPluginHookKeys>(
+    hookName: H,
+    ...args: Parameters<Required<RspressPlugin>[H]>
+  ) {
+    // @ts-expect-error - FIXME: TS is not able to infer the correct type
     return this.#plugins.reduce(async (prev, plugin) => {
       if (typeof plugin[hookName] === 'function') {
         await prev;
-        return plugin[hookName](...args);
+        return plugin[hookName](
+          // @ts-expect-error - FIXME: TS is not able to infer the correct type
+          ...args,
+        );
       }
       return prev;
     }, Promise.resolve());

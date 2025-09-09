@@ -1,13 +1,10 @@
+import fs from 'node:fs';
 import path from 'node:path';
-import type { RspressPlugin } from '@rspress/shared';
-import fs from '@modern-js/utils/fs-extra';
-import type {
-  PluginOptions,
-  SupportLanguages,
-  ExtendedPageData,
-} from './types';
-import { docgen } from './docgen';
+import type { RspressPlugin } from '@rspress/core';
+import { logger } from '@rspress/core';
 import { apiDocMap } from './constants';
+import { docgen } from './docgen';
+import type { PluginOptions, SupportLanguages } from './types';
 
 /**
  * The plugin is used to generate api doc for files.
@@ -23,15 +20,17 @@ export function pluginApiDocgen(options?: PluginOptions): RspressPlugin {
     name: '@modern-js/doc-plugin-api-docgen',
     config(config) {
       config.markdown = config.markdown || {};
-      config.markdown.mdxRs = false;
       return config;
     },
     async beforeBuild(config, isProd) {
-      // only support zh and en
-      const languages = (
+      // only support zh , en and ru
+      const languages: SupportLanguages[] = (
         config.themeConfig?.locales?.map(locale => locale.lang) ||
-        config.locales?.map(locale => locale.lang) || [config.lang]
-      ).filter(lang => lang === 'zh' || lang === 'en') as SupportLanguages[];
+        config.locales?.map(locale => locale.lang) ||
+        []
+      ).filter((lang): lang is SupportLanguages =>
+        ['zh', 'en', 'ru'].includes(lang),
+      ) as SupportLanguages[];
       await docgen({
         entries,
         apiParseTool,
@@ -40,6 +39,12 @@ export function pluginApiDocgen(options?: PluginOptions): RspressPlugin {
         parseToolOptions,
         isProd,
       });
+      config.builderConfig = config.builderConfig || {};
+      config.builderConfig.source = config.builderConfig.source || {};
+      config.builderConfig.source.define = {
+        ...config.builderConfig.source.define,
+        RSPRESS_PLUGIN_API_DOCGEN_MAP: JSON.stringify(apiDocMap),
+      };
     },
     async modifySearchIndexData(pages) {
       // Update the search index of module doc which includes `<API moduleName="foo" />` and `<API moduleName="foo" ></API>
@@ -48,24 +53,29 @@ export function pluginApiDocgen(options?: PluginOptions): RspressPlugin {
       await Promise.all(
         pages.map(async page => {
           const { _filepath, lang } = page;
-          let content = await fs.readFile(_filepath, 'utf-8');
-          let matchResult = new RegExp(apiCompRegExp).exec(content);
+          let content = await fs.promises.readFile(_filepath, 'utf-8');
+          let matchResult = apiCompRegExp.exec(content);
           if (!matchResult) {
             return;
           }
           while (matchResult !== null) {
-            const [matchContent, moduleName] = matchResult;
+            const matchContent = matchResult[0];
+            const moduleName = matchResult[2] ?? matchResult[5] ?? '';
             const apiDoc =
-              apiDocMap[moduleName] || apiDocMap[`${moduleName}-${lang}`];
+              apiDocMap[moduleName] ??
+              apiDocMap[`${moduleName}-${lang ? lang : 'en'}`] ??
+              '';
+            if (matchContent && !apiDoc) {
+              logger.warn(
+                `No api doc found for module: ${moduleName} in lang: ${lang ?? 'en'}`,
+              );
+            }
             content = content.replace(matchContent, apiDoc);
-            matchResult = new RegExp(apiCompRegExp).exec(content);
+            matchResult = apiCompRegExp.exec(content);
           }
           page.content = content;
         }),
       );
-    },
-    extendPageData(pageData) {
-      (pageData as ExtendedPageData).apiDocMap = { ...apiDocMap };
     },
     markdown: {
       globalComponents: [

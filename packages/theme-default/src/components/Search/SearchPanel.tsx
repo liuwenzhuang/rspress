@@ -1,20 +1,15 @@
-/* eslint-disable max-lines */
-import { usePageData } from '@rspress/runtime';
-import { type SearchOptions, isProduction } from '@rspress/shared';
-import { debounce, groupBy } from 'lodash-es';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import * as userSearchHooks from 'virtual-search-hooks';
+import { createPortal, useLocaleSiteData, usePageData } from '@rspress/runtime';
+import type { AnyFunction } from '@rspress/shared';
 import CloseSvg from '@theme-assets/close';
 import LoadingSvg from '@theme-assets/loading';
 import SearchSvg from '@theme-assets/search';
+import { debounce } from 'lodash-es';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import * as userSearchHooks from 'virtual-search-hooks';
+import { useNavigate } from '../Link/useNavigate';
 import { SvgWrapper } from '../SvgWrapper';
-import { useLocaleSiteData } from '../../logic/useLocaleSiteData';
-import { getSidebarGroupData } from '../../logic/useSidebarData';
 import { Tab, Tabs } from '../Tabs';
-import { NoSearchResult } from './NoSearchResult';
-import { SuggestItem } from './SuggestItem';
-import styles from './index.module.scss';
+import * as styles from './index.module.scss';
 import { PageSearcher } from './logic/search';
 import type {
   CustomMatchResult,
@@ -24,7 +19,8 @@ import type {
   PageSearcherConfig,
 } from './logic/types';
 import { RenderType } from './logic/types';
-import { normalizeSearchIndexes, removeDomain } from './logic/util';
+import { NoSearchResult } from './NoSearchResult';
+import { SuggestItem } from './SuggestItem';
 
 const KEY_CODE = {
   ARROW_UP: 'ArrowUp',
@@ -39,28 +35,33 @@ export interface SearchPanelProps {
   setFocused: (focused: boolean) => void;
 }
 
-const useDebounce = <T extends (...args: any[]) => void>(cb: T): T => {
+const useDebounce = <T extends AnyFunction>(cb: T) => {
   const cbRef = useRef(cb);
   cbRef.current = cb;
   const debounced = useCallback(
-    debounce((...args: any) => cbRef.current(...args), 150),
+    debounce(
+      ((...args: Parameters<T>): ReturnType<T> => cbRef.current(...args)) as T,
+      150,
+    ),
     [],
   );
-  return debounced as unknown as T;
+  return debounced;
 };
 
 export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
   const [query, setQuery] = useState('');
   const [searchResult, setSearchResult] = useState<MatchResult>([]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [initing, setIniting] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [resultTabIndex, setResultTabIndex] = useState(0);
   const [currentSuggestionIndex, setCurrentSuggestionIndex] = useState(0);
   const pageSearcherRef = useRef<PageSearcher | null>(null);
   const pageSearcherConfigRef = useRef<PageSearcherConfig | null>(null);
-  const searchResultRef = useRef(null);
-  const searchResultTabRef = useRef(null);
+  const [initStatus, setInitStatus] = useState<
+    'initial' | 'initing' | 'inited'
+  >('initial');
+  const searchResultRef = useRef<HTMLDivElement>(null);
+  const searchResultTabRef = useRef<HTMLDivElement>(null);
   const mousePositionRef = useRef<{
     pageX: number | null;
     pageY: number | null;
@@ -72,17 +73,23 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
   // only scroll after keydown arrow up and arrow down.
   const [canScroll, setCanScroll] = useState(false);
   const scrollTo = (offsetTop: number, offsetHeight: number) => {
-    if (canScroll) {
+    const currentOffsetHeight = searchResultRef.current?.offsetHeight;
+    const currentScrollTop = searchResultRef.current?.scrollTop;
+    if (
+      canScroll &&
+      currentOffsetHeight !== undefined &&
+      currentScrollTop !== undefined
+    ) {
       // Down
       // 50 = 20(modal margin) + 40(input height) - 10(item margin)
       // -10 = 50(following) - 50(tab title) - 10(item margin)
       const scrollDown =
         offsetTop +
         offsetHeight -
-        searchResultRef?.current?.offsetHeight -
+        currentOffsetHeight -
         (searchResult.length === 1 ? 50 : -10);
-      if (scrollDown > searchResultRef?.current?.scrollTop) {
-        searchResultRef?.current?.scrollTo({
+      if (scrollDown > currentScrollTop) {
+        searchResultRef.current?.scrollTo({
           top: scrollDown,
         });
       }
@@ -92,8 +99,8 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
       // 10 = 70(following) - 50(tab title) - 10(item margin)
       const scrollUp =
         searchResult.length === 1 ? offsetTop - 70 : offsetTop - 10;
-      if (scrollUp < searchResultRef?.current?.scrollTop) {
-        searchResultRef?.current?.scrollTo({
+      if (scrollUp < currentScrollTop) {
+        searchResultRef.current?.scrollTo({
           top: scrollUp,
         });
       }
@@ -103,11 +110,10 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
     siteData,
     page: { lang, version },
   } = usePageData();
-  const { sidebar, searchPlaceholderText = 'Search Docs' } =
-    useLocaleSiteData();
+  const { searchPlaceholderText = 'Search docs' } = useLocaleSiteData();
+  const navigate = useNavigate();
   const { search, title: siteTitle } = siteData;
-  const versionedSearch =
-    search && search.mode !== 'remote' && search.versioned;
+  const versionedSearch = typeof search !== 'boolean' && search?.versioned;
   const DEFAULT_RESULT = [
     { group: siteTitle, result: [], renderType: RenderType.Default },
   ];
@@ -116,18 +122,21 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
   const currentRenderType =
     searchResult[resultTabIndex]?.renderType ?? RenderType.Default;
 
-  // We need to extract the group name by the link so that we can divide the search result into different groups.
-  const extractGroupName = (link: string) =>
-    getSidebarGroupData(sidebar, link).group;
+  if (search === false) {
+    return null;
+  }
 
-  async function initPageSearcher() {
-    if (search === false) {
-      return;
+  /**
+   * Create page searcher instance.
+   */
+  const createSearcher = () => {
+    if (pageSearcherRef.current) {
+      return pageSearcherRef.current;
     }
+
     const pageSearcherConfig = {
       currentLang: lang,
       currentVersion: version,
-      extractGroupName,
     };
     const pageSearcher = new PageSearcher({
       indexName: siteTitle,
@@ -136,11 +145,27 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
     });
     pageSearcherRef.current = pageSearcher;
     pageSearcherConfigRef.current = pageSearcherConfig;
-    await pageSearcherRef.current.init();
-    setIniting(false);
+
+    return pageSearcherRef.current;
+  };
+
+  /**
+   * Call `searcher.init` to initialize the search index
+   */
+  async function initSearch() {
+    if (initStatus !== 'initial') {
+      return;
+    }
+
+    const searcher = createSearcher();
+
+    setInitStatus('initing');
+    await searcher.init();
+    setInitStatus('inited');
+
     const query = searchInputRef.current?.value;
     if (query) {
-      const matched = await pageSearcherRef.current?.match(query);
+      const matched = await searcher.match(query);
       setSearchResult(matched || DEFAULT_RESULT);
       setIsSearching(false);
     }
@@ -162,6 +187,10 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
           }
           break;
         case KEY_CODE.ARROW_DOWN:
+          // prevent arrow down key event when IME is composing
+          if (e.isComposing) {
+            return;
+          }
           if (focused) {
             e.preventDefault();
             if (
@@ -176,6 +205,10 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
           }
           break;
         case KEY_CODE.ARROW_UP:
+          // prevent arrow up key event when IME is composing
+          if (e.isComposing) {
+            return;
+          }
           if (focused) {
             e.preventDefault();
             if (currentRenderType === RenderType.Default) {
@@ -189,23 +222,23 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
           }
           break;
         case KEY_CODE.ENTER:
+          /**
+           * prevent enter key event when IME is composing, it's more friendly for CJK users.
+           * @see https://github.com/web-infra-dev/rspress/issues/1861
+           */
+          if (e.isComposing) {
+            return;
+          }
           if (
             currentSuggestionIndex >= 0 &&
             currentRenderType === RenderType.Default
           ) {
             // the ResultItem has been normalized to display
-            const flatSuggestions = [].concat(
-              ...Object.values(normalizeSuggestions(currentSuggestions)),
-            );
+            const flatSuggestions = Object.values(
+              normalizeSuggestions(currentSuggestions),
+            ).flat();
             const suggestion = flatSuggestions[currentSuggestionIndex];
-            const isCurrent = resultTabIndex === 0;
-            if (isCurrent) {
-              window.location.href = isProduction()
-                ? suggestion.link
-                : removeDomain(suggestion.link);
-            } else {
-              window.open(suggestion.link);
-            }
+            navigate(suggestion.link);
             clearSearchState();
           }
           break;
@@ -232,31 +265,40 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
   useEffect(() => {
     if (focused) {
       setSearchResult(DEFAULT_RESULT);
-      if (!pageSearcherRef.current) {
-        initPageSearcher();
-      }
+      initSearch();
     } else {
       setQuery('');
     }
   }, [focused]);
 
+  // Prefetch the search index when the page is idle
+  useEffect(() => {
+    if ('requestIdleCallback' in window && !pageSearcherRef.current) {
+      window.requestIdleCallback(() => {
+        const searcher = createSearcher();
+        searcher.fetchSearchIndex();
+      });
+    }
+  }, []);
+
+  // init pageSearcher again when lang or version changed
   useEffect(() => {
     const { currentLang, currentVersion } = pageSearcherConfigRef.current ?? {};
     const isLangChanged = lang !== currentLang;
     const isVersionChanged = versionedSearch && version !== currentVersion;
 
-    if (!initing && (isLangChanged || isVersionChanged)) {
-      initPageSearcher();
+    if (isLangChanged || isVersionChanged) {
+      // reset status first
+      setInitStatus('initial');
+      pageSearcherRef.current = null;
+      const searcher = createSearcher();
+      searcher.fetchSearchIndex();
     }
-    // init pageSearcher again when lang or version changed
   }, [lang, version, versionedSearch]);
 
   const handleQueryChangedImpl = async (value: string) => {
     let newQuery = value;
     setQuery(newQuery);
-    if (search && search.mode === 'remote' && search.searchLoading) {
-      setIsSearching(true);
-    }
     if (newQuery) {
       const searchResult: MatchResult = [];
 
@@ -310,14 +352,23 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
 
   const handleQueryChange = useDebounce(handleQueryChangedImpl);
 
-  const normalizeSuggestions = (suggestions: DefaultMatchResult['result']) =>
-    groupBy(suggestions, 'group');
+  const normalizeSuggestions = (
+    suggestions: DefaultMatchResult['result'],
+  ): Record<string, DefaultMatchResultItem[]> => {
+    return suggestions.reduce(
+      (groups, item) => {
+        const group = item.title;
+        if (!groups[group]) {
+          groups[group] = [];
+        }
+        groups[group].push(item);
+        return groups;
+      },
+      {} as Record<string, DefaultMatchResult['result']>,
+    );
+  };
 
-  const renderSearchResult = (
-    result: MatchResult,
-    searchOptions: SearchOptions,
-    isSearching: boolean,
-  ) => {
+  const renderSearchResult = (result: MatchResult, isSearching: boolean) => {
     if (result.length === 1) {
       const currentSearchResult = result[0]
         .result as DefaultMatchResult['result'];
@@ -332,13 +383,7 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
     }
 
     const tabValues = result.map(item => {
-      if (!searchOptions || searchOptions.mode !== 'remote') {
-        return item.group;
-      }
-      const indexItem = normalizeSearchIndexes(
-        searchOptions.searchIndexes || [],
-      ).find(indexInfo => indexInfo.value === item.group);
-      return indexItem.label;
+      return item.group;
     });
 
     const renderKey = 'render' as const;
@@ -351,7 +396,6 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
           setResultTabIndex(index);
           setCurrentSuggestionIndex(0);
         }}
-        // @ts-ignore
         ref={searchResultTabRef}
       >
         {result.map(item => (
@@ -374,25 +418,27 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
     // if isSearching, show loading svg
     if (isSearching) {
       return (
-        <div className="flex flex-col items-center">
+        <div className="rp-flex rp-flex-col rp-items-center">
           <SvgWrapper icon={LoadingSvg} className="m-8 opacity-80" />
         </div>
       );
     }
-    // if no result, show no result
-    if (suggestionList.length === 0 && !initing) {
+
+    // if no result, show the no result tip
+    if (suggestionList.length === 0 && initStatus === 'inited') {
       return <NoSearchResult query={query} />;
     }
+
     const normalizedSuggestions = normalizeSuggestions(suggestionList);
     // accumulateIndex is used to calculate the index of the suggestion in the whole list.
     let accumulateIndex = -1;
     return (
-      <ul className={styles.suggestList}>
+      <ul>
         {Object.keys(normalizedSuggestions).map(group => {
           const groupSuggestions = normalizedSuggestions[group] || [];
           return (
             <li key={group}>
-              <ul className="pb-2">
+              <ul className="rp-pb-2">
                 {groupSuggestions.map(suggestion => {
                   accumulateIndex++;
                   const suggestionIndex = accumulateIndex;
@@ -451,16 +497,16 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
                 e.stopPropagation();
               }}
             >
-              <div className="flex items-center">
+              <div className="rp-flex rp-items-center">
                 <div className={styles.inputForm}>
                   <label>
                     <SvgWrapper icon={SearchSvg} />
                   </label>
                   <input
-                    className={styles.input}
+                    className={`rspress-search-panel-input ${styles.input}`}
                     ref={searchInputRef}
                     placeholder={searchPlaceholderText}
-                    aria-label="Search"
+                    aria-label="SearchPanelInput"
                     autoComplete="off"
                     autoFocus
                     onChange={e => handleQueryChange(e.target.value)}
@@ -484,7 +530,7 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
                   </label>
                 </div>
                 <h2
-                  className="text-brand ml-2 sm:hidden cursor-pointer"
+                  className="rp-text-brand rp-ml-2 sm:rp-hidden rp-cursor-pointer"
                   onClick={e => {
                     e.stopPropagation();
                     clearSearchState();
@@ -494,12 +540,12 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
                 </h2>
               </div>
 
-              {query && !initing ? (
+              {query && initStatus === 'inited' ? (
                 <div
                   className={`${styles.searchHits}  rspress-scrollbar`}
                   ref={searchResultRef}
                 >
-                  {renderSearchResult(searchResult, search, isSearching)}
+                  {renderSearchResult(searchResult, isSearching)}
                 </div>
               ) : null}
             </div>

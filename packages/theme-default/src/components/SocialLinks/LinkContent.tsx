@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import type { SocialLink } from '@rspress/shared';
-import styles from './index.module.scss';
-import presetIcons from './presetIcons';
+import { useState } from 'react';
+import iconMap from 'virtual-social-links';
+import * as styles from './index.module.scss';
 
 interface ILinkContentComp {
   link: SocialLink;
@@ -12,15 +12,10 @@ export const LinkContent = (props: ILinkContentComp) => {
   const { link, popperStyle = {} } = props;
   const { icon, mode = 'link', content } = link;
 
-  let IconComp: React.ReactElement = null;
-  if (typeof icon === 'object') {
-    // eslint-disable-next-line react/no-danger
-    IconComp = <div dangerouslySetInnerHTML={{ __html: icon.svg }}></div>;
-  } else if (icon) {
-    const iconLowerCase = icon.toLowerCase();
-    IconComp =
-      // redirect twitter's logo to `x`
-      iconLowerCase === 'twitter' ? presetIcons.x : presetIcons[iconLowerCase];
+  let IconComp: React.ReactElement = <></>;
+  if (icon) {
+    const html = typeof icon === 'string' ? iconMap[icon] : icon.svg;
+    IconComp = <div dangerouslySetInnerHTML={{ __html: html }}></div>;
   }
 
   const [contentVisible, setContentVisible] = useState(false);
@@ -47,7 +42,7 @@ export const LinkContent = (props: ILinkContentComp) => {
   if (mode === 'text') {
     return (
       <div
-        className={`${styles.socialLinksIcon} cursor-pointer relative mx-3`}
+        className={`${styles.socialLinksIcon} rp-cursor-pointer rp-relative rp-mx-3`}
         onMouseEnter={mouseEnterIcon}
         onMouseLeave={mouseLeavePopper}
       >
@@ -59,9 +54,9 @@ export const LinkContent = (props: ILinkContentComp) => {
               border: '1px solid var(--rp-c-divider-light)',
               ...popperStyle,
             }}
-            className="z-[1] p-3 w-50 absolute right-0 bg-white dark:bg-dark"
+            className="rp-z-[1] rp-p-3 rp-w-50 rp-absolute rp-right-0 rp-bg-white dark:rp-bg-dark"
           >
-            <div className="text-md">{content}</div>
+            <div className="rp-text-md">{content}</div>
           </div>
         ) : null}
       </div>
@@ -70,14 +65,14 @@ export const LinkContent = (props: ILinkContentComp) => {
   if (mode === 'img') {
     return (
       <div
-        className={`${styles.socialLinksIcon} cursor-pointer relative`}
+        className={`${styles.socialLinksIcon} rp-cursor-pointer rp-relative`}
         onMouseEnter={mouseEnterIcon}
         onMouseLeave={mouseLeavePopper}
       >
         {IconComp}
         {contentVisible ? (
           <div
-            className="break-all z-[1] p-3 w-[50px] h-[50px] absolute right-0 bg-white dark:bg-dark rounded-xl"
+            className="rp-break-all rp-z-[1] rp-p-3 rp-w-[50px] rp-h-[50px] rp-absolute rp-right-0 rp-bg-white dark:rp-bg-dark rp-rounded-xl"
             style={{
               boxShadow: 'var(--rp-shadow-3)',
               ...popperStyle,
@@ -92,14 +87,14 @@ export const LinkContent = (props: ILinkContentComp) => {
   if (mode === 'dom') {
     return (
       <div
-        className={`${styles.socialLinksIcon} cursor-pointer relative`}
+        className={`${styles.socialLinksIcon} rp-cursor-pointer rp-relative`}
         onMouseEnter={mouseEnterIcon}
         onMouseLeave={mouseLeavePopper}
       >
         {IconComp}
         {contentVisible ? (
           <div
-            className="break-all z-[1] p-3 absolute right-0 bg-white dark:bg-dark rounded-xl"
+            className="rp-break-all rp-z-[1] rp-p-3 rp-absolute rp-right-0 rp-bg-white dark:rp-bg-dark rp-rounded-xl"
             style={{
               boxShadow: 'var(--rp-shadow-3)',
               ...popperStyle,

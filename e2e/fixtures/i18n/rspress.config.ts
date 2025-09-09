@@ -1,14 +1,12 @@
 import * as path from 'node:path';
-import { defineConfig } from 'rspress/config';
+import { defineConfig } from '@rspress/core';
 
 export default defineConfig({
   root: path.join(__dirname, 'doc'),
   lang: 'zh',
-  markdown: {
-    mdxRs: false,
-  },
   themeConfig: {
     darkMode: false,
+    localeRedirect: 'never',
     locales: [
       {
         lang: 'zh',

@@ -1,0 +1,67 @@
+{
+  "name": "@rspress/plugin-llms",
+  "version": "2.0.0-beta.31",
+  "description": "A plugin for rspress to generate llms.txt, llms-full.txt, md files to let llm understand your website.",
+  "bugs": "https://github.com/web-infra-dev/rspress/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/web-infra-dev/rspress.git",
+    "directory": "packages/plugin-llm"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "default": "./dist/runtime/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "static"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "rslib build -w",
+    "reset": "rimraf ./**/node_modules"
+  },
+  "dependencies": {
+    "remark-mdx": "^3.1.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.52.11",
+    "@rsbuild/core": "~1.5.4",
+    "@rsbuild/plugin-react": "~1.4.0",
+    "@rsbuild/plugin-sass": "~1.4.0",
+    "@rslib/core": "0.12.4",
+    "@rspress/config": "workspace:*",
+    "@types/hast": "^3.0.4",
+    "@types/node": "^22.8.1",
+    "@types/react": "^19.1.12",
+    "react": "^19.1.1",
+    "rsbuild-plugin-publint": "^0.3.3",
+    "typescript": "^5.8.2",
+    "vfile": "^6.0.3"
+  },
+  "peerDependencies": {
+    "@rspress/core": "workspace:^2.0.0-beta.31"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

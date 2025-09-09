@@ -1,24 +1,24 @@
-import { join } from 'node:path';
 import net from 'node:net';
+import { join } from 'node:path';
+import {
+  createRsbuild,
+  mergeRsbuildConfig,
+  type RsbuildConfig,
+  type RsbuildPluginAPI,
+} from '@rsbuild/core';
+import { pluginBabel } from '@rsbuild/plugin-babel';
+import { pluginReact } from '@rsbuild/plugin-react';
+import { pluginSolid } from '@rsbuild/plugin-solid';
 import {
   type RouteMeta,
   type RspressPlugin,
   removeTrailingSlash,
-} from '@rspress/shared';
-import {
-  type RsbuildConfig,
-  type RsbuildPluginAPI,
-  createRsbuild,
-  mergeRsbuildConfig,
-} from '@rsbuild/core';
-import { pluginSolid } from '@rsbuild/plugin-solid';
-import { pluginBabel } from '@rsbuild/plugin-babel';
-import { pluginReact } from '@rsbuild/plugin-react';
-import { isEqual, cloneDeep } from 'lodash';
-import { remarkCodeToDemo, demos } from './remarkPlugin';
+} from '@rspress/core';
+import { cloneDeep, isEqual } from 'lodash';
 import { staticPath } from './constant';
-import type { Options, StartServerResult } from './types';
 import { generateEntry } from './generate-entry';
+import { demos, remarkCodeToDemo } from './remarkPlugin';
+import type { Options, StartServerResult } from './types';
 
 // global variables which need to be initialized in plugin
 let routeMeta: RouteMeta[];
@@ -37,12 +37,14 @@ export function pluginPreview(options?: Options): RspressPlugin {
     previewLanguages = DEFAULT_PREVIEW_LANGUAGES,
     previewCodeTransform = ({ code }: { code: string }) => code,
   } = options ?? {};
-  const previewMode = options?.previewMode ?? isMobile ? 'iframe' : 'internal';
+  const previewMode =
+    options?.previewMode ?? (isMobile ? 'iframe' : 'internal');
   const {
     devPort = 7890,
     framework = 'react',
     position = iframePosition,
     builderConfig = {},
+    customEntry,
   } = iframeOptions;
   const globalUIComponents =
     position === 'fixed'
@@ -50,14 +52,13 @@ export function pluginPreview(options?: Options): RspressPlugin {
       : [];
   const getRouteMeta = () => routeMeta;
   let lastDemos: typeof demos;
-  let devServer: StartServerResult;
+  let devServer: StartServerResult | undefined;
   let clientConfig: RsbuildConfig;
   const port = devPort;
   return {
     name: '@rspress/plugin-preview',
     config(config) {
       config.markdown = config.markdown || {};
-      config.markdown.mdxRs = false;
       return config;
     },
     routeGenerated(routes: RouteMeta[]) {
@@ -75,8 +76,13 @@ export function pluginPreview(options?: Options): RspressPlugin {
               server.close(resolve);
             });
           });
-        } catch (e: any) {
-          if (e.code !== 'EADDRINUSE') {
+        } catch (e) {
+          if (
+            !!e &&
+            typeof e === 'object' &&
+            'code' in e &&
+            e.code !== 'EADDRINUSE'
+          ) {
             throw e;
           }
 
@@ -92,7 +98,13 @@ export function pluginPreview(options?: Options): RspressPlugin {
       }
       lastDemos = cloneDeep(demos);
       await devServer?.server?.close();
-      const sourceEntry = generateEntry(demos, framework, position);
+      devServer = undefined;
+      const sourceEntry = await generateEntry(
+        demos,
+        framework,
+        position,
+        customEntry,
+      );
       const outDir = join(config.outDir ?? 'doc_build', '~demo');
       if (Object.keys(sourceEntry).length === 0) {
         return;
@@ -100,17 +112,18 @@ export function pluginPreview(options?: Options): RspressPlugin {
       const { html, source, output, performance } = clientConfig ?? {};
       const rsbuildConfig = mergeRsbuildConfig(
         {
-          dev: {
-            progressBar: false,
-          },
           server: {
             port: devPort,
             printUrls: () => undefined,
             strictPort: true,
           },
+          dev: {
+            lazyCompilation: false,
+          },
           performance: {
             ...performance,
             printFileSize: false,
+            buildCache: false,
           },
           html,
           source: {
@@ -128,18 +141,13 @@ export function pluginPreview(options?: Options): RspressPlugin {
             // not copy files again
             copy: undefined,
           },
-          plugins: config?.builderPlugins,
         },
         builderConfig,
       );
       const rsbuildInstance = await createRsbuild({
+        callerName: 'rspress',
         rsbuildConfig,
       });
-
-      const { pluginSass } = await import('@rsbuild/plugin-sass');
-      const { pluginLess } = await import('@rsbuild/plugin-less');
-
-      rsbuildInstance.addPlugins([pluginSass(), pluginLess()]);
 
       if (framework === 'solid') {
         rsbuildInstance.addPlugins([
@@ -172,6 +180,11 @@ export function pluginPreview(options?: Options): RspressPlugin {
 
           chain.resolve.extensions.prepend('.md').prepend('.mdx');
         },
+        rspack: {
+          watchOptions: {
+            ignored: /\.git/,
+          },
+        },
       },
       plugins: [
         {
@@ -185,6 +198,7 @@ export function pluginPreview(options?: Options): RspressPlugin {
             });
             api.onCloseDevServer(async () => {
               await devServer?.server?.close();
+              devServer = undefined;
             });
           },
         },
@@ -192,10 +206,10 @@ export function pluginPreview(options?: Options): RspressPlugin {
     },
     extendPageData(pageData, isProd) {
       if (!isProd) {
+        // Property 'devPort' does not exist on type 'PageIndexInfo'.
+        // @ts-expect-error
         pageData.devPort = port;
       }
-      // highlightLanguages analysis is built-in in mdx-rs, we need to add extraHighlightLanguages in preview plugin which using mdx-js to perform code block
-      pageData.extraHighlightLanguages = previewLanguages;
     },
     markdown: {
       remarkPlugins: [

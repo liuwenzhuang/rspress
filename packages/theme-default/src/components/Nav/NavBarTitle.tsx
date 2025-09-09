@@ -1,13 +1,18 @@
+import {
+  addLeadingSlash,
+  normalizeImagePath,
+  useLocaleSiteData,
+  useSite,
+} from '@rspress/runtime';
+import { Link } from '@theme';
 import { useMemo } from 'react';
-import { normalizeImagePath, usePageData, withBase } from '@rspress/runtime';
-import styles from './index.module.scss';
-import { useLocaleSiteData } from '../../logic';
+import * as styles from './index.module.scss';
 
 export const NavBarTitle = () => {
-  const { siteData } = usePageData();
+  const { site } = useSite();
   const localeData = useLocaleSiteData();
-  const { logo: rawLogo, logoText } = siteData;
-  const title = localeData.title ?? siteData.title;
+  const { logo: rawLogo, logoText } = site;
+  const title = localeData.title ?? site.title;
   const logo = useMemo(() => {
     if (!rawLogo) {
       return null;
@@ -18,7 +23,7 @@ export const NavBarTitle = () => {
           src={normalizeImagePath(rawLogo)}
           alt="logo"
           id="logo"
-          className="mr-4 rspress-logo"
+          className="rspress-logo"
         />
       );
     }
@@ -28,13 +33,13 @@ export const NavBarTitle = () => {
           src={normalizeImagePath(rawLogo.light)}
           alt="logo"
           id="logo"
-          className="mr-4 rspress-logo dark:hidden"
+          className="rspress-logo dark:rp-hidden"
         />
         <img
           src={normalizeImagePath(rawLogo.dark)}
           alt="logo"
           id="logo"
-          className="mr-4 rspress-logo hidden dark:block"
+          className="rspress-logo rp-hidden dark:rp-block"
         />
       </>
     );
@@ -42,14 +47,14 @@ export const NavBarTitle = () => {
 
   return (
     <div className={`${styles.navBarTitle}`}>
-      <a
-        href={withBase(localeData.langRoutePrefix || '/')}
-        className="flex items-center w-full h-full text-base font-semibold transition-opacity duration-300 hover:opacity-60"
+      <Link
+        href={addLeadingSlash(localeData.langRoutePrefix ?? '/')}
+        className="rp-flex rp-items-center rp-w-full rp-h-full rp-text-base rp-font-semibold rp-transition-opacity rp-duration-300 hover:rp-opacity-60"
       >
-        {logo}
+        {logo && <div className="rp-mr-1 rp-min-w-8">{logo}</div>}
         {logoText && <span>{logoText}</span>}
         {!logo && !logoText && <span>{title}</span>}
-      </a>
+      </Link>
     </div>
   );
 };

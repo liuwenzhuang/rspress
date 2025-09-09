@@ -1,10 +1,9 @@
-import type { Plugin } from 'unified';
-import { visitChildren } from 'unist-util-visit-children';
+import { extractTextAndId } from '@rspress/shared/node-utils';
 import Slugger from 'github-slugger';
 import type { Root } from 'hast';
-import type { Processor } from '@mdx-js/mdx/lib/core';
-import type { PageMeta } from '../loader';
-import { extractTextAndId } from '../../utils';
+import type { Plugin } from 'unified';
+import { visitChildren } from 'unist-util-visit-children';
+import type { PageMeta } from '../types';
 
 export interface TocItem {
   id: string;
@@ -13,7 +12,7 @@ export interface TocItem {
 }
 
 interface ChildNode {
-  type: 'link' | 'text' | 'inlineCode' | 'strong';
+  type: 'link' | 'text' | 'inlineCode' | 'strong' | 'emphasis' | 'delete';
   value: string;
   children?: ChildNode[];
 }
@@ -44,6 +43,12 @@ export const parseToc = (tree: Root) => {
           if (child.type === 'strong') {
             return `**${child.children?.map(item => item.value).join('')}**`;
           }
+          if (child.type === 'emphasis') {
+            return `*${child.children?.map(item => item.value).join('')}*`;
+          }
+          if (child.type === 'delete') {
+            return `~~${child.children?.map(item => item.value).join('')}~~`;
+          }
           if (child.type === 'text') {
             const [textPart, idPart] = extractTextAndId(child.value);
             customId = idPart;
@@ -59,7 +64,7 @@ export const parseToc = (tree: Root) => {
       if (node.depth === 1) {
         if (!title) title = text;
       } else {
-        const id = customId ? customId : slugger.slug(text);
+        const id = customId ? customId : slugger.slug(text.trim());
         const { depth } = node;
         toc.push({ id, text, depth });
       }
@@ -71,7 +76,7 @@ export const parseToc = (tree: Root) => {
   };
 };
 
-export const remarkPluginToc: Plugin<[], Root> = function (this: Processor) {
+export const remarkToc: Plugin<[], Root> = function () {
   const data = this.data() as {
     pageMeta: PageMeta;
   };

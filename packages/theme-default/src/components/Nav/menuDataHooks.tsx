@@ -1,9 +1,11 @@
-import { replaceLang, replaceVersion } from '@rspress/shared';
 import { useLocation, usePageData, useVersion } from '@rspress/runtime';
+import { replaceLang, replaceVersion } from '@rspress/shared';
 import Translator from '@theme-assets/translator';
+import site from 'virtual-site-data';
 import { SvgWrapper } from '../SvgWrapper';
+import type { NavMenuGroupItem } from './NavMenuGroup';
 
-export function useTranslationMenuData() {
+export function useTranslationMenuData(): NavMenuGroupItem {
   const { siteData, page } = usePageData();
   const currentVersion = useVersion();
   const { pathname, search } = useLocation();
@@ -15,7 +17,6 @@ export function useTranslationMenuData() {
   const cleanUrls = siteData.route?.cleanUrls || false;
   const hasMultiLanguage = localeLanguages.length > 1;
   const { lang: currentLang, pageType } = page;
-  const { base } = siteData;
 
   const translationMenuData = hasMultiLanguage
     ? {
@@ -41,7 +42,7 @@ export function useTranslationMenuData() {
               current: currentVersion,
               default: defaultVersion,
             },
-            base,
+            site.base,
             cleanUrls,
             pageType === '404',
           ),
@@ -49,7 +50,7 @@ export function useTranslationMenuData() {
         activeValue: localeLanguages.find(item => currentLang === item.lang)
           ?.label,
       }
-    : null;
+    : { items: [] };
   return translationMenuData;
 }
 
@@ -60,7 +61,6 @@ export function useVersionMenuData() {
   const cleanUrls = siteData.route?.cleanUrls || false;
   const defaultVersion = siteData.multiVersion.default || '';
   const versions = siteData.multiVersion.versions || [];
-  const { base } = siteData;
   const versionsMenuData = {
     items: versions.map(version => ({
       text: version,
@@ -71,7 +71,7 @@ export function useVersionMenuData() {
           target: version,
           default: defaultVersion,
         },
-        base,
+        site.base,
         cleanUrls,
         page.pageType === '404',
       ),

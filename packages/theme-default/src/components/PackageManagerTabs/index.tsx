@@ -1,26 +1,36 @@
-import { Tabs, Tab } from '@theme';
-import { Pre } from '../../layout/DocLayout/docComponents/pre';
-import { Code } from '../../layout/DocLayout/docComponents/code';
-import { Npm } from './icons/Npm';
-import { Yarn } from './icons/Yarn';
-import { Pnpm } from './icons/Pnpm';
+import { Tab, Tabs } from '@theme';
+import { PreWithCodeButtonGroup } from '../../layout/DocLayout/docComponents/pre';
 import { Bun } from './icons/Bun';
+import { Npm } from './icons/Npm';
+import { Pnpm } from './icons/Pnpm';
+import { Yarn } from './icons/Yarn';
 import './index.scss';
+import type { ReactNode } from 'react';
 
-export interface PackageManagerTabProps {
-  command:
-    | string
-    | {
+export type PackageManagerTabProps = (
+  | {
+      command: string;
+      /**
+       * If true, the command will be interpreted as a shell command and prefixed with npx for npm,
+       * or the package manager binary for others.
+       */
+      exec?: boolean;
+    }
+  | {
+      command: {
         npm?: string;
         yarn?: string;
         pnpm?: string;
         bun?: string;
       };
+      exec?: never;
+    }
+) & {
   additionalTabs?: {
     tool: string;
-    icon?: React.ReactNode;
+    icon?: ReactNode;
   }[];
-}
+};
 
 function normalizeCommand(command: string): string {
   // If command is yarn create foo@latest, remove `@latest`
@@ -37,27 +47,35 @@ function normalizeCommand(command: string): string {
     .split(' ')
     .filter(item => !item.startsWith('-') && !item.startsWith('--'))
     .join(' ');
-  if (pureCommand === 'yarn install' || pureCommand === 'bun install') {
+  if (
+    pureCommand === 'yarn install' ||
+    pureCommand === 'pnpm install' ||
+    pureCommand === 'bun install'
+  ) {
     return command;
   }
 
   return command.replace('install', 'add');
 }
 
+/**
+ * 'npm install foo@latest' -> ['npm', ' install foo@latest']
+ */
+function splitTo2Parts(command: string): [string, string] {
+  const parts = command.split(' ');
+  const firstPart = parts[0];
+  const secondPart = command.slice(firstPart.length);
+  return [firstPart, secondPart];
+}
+
 export function PackageManagerTabs({
   command,
+  exec,
   additionalTabs = [],
 }: PackageManagerTabProps) {
-  let commandInfo: {
-    npm?: string;
-    yarn?: string;
-    pnpm?: string;
-    bun?: string;
-    [key: string]: string;
-  };
-
+  let commandInfo: Record<string, string>;
   // Init Icons
-  const packageMangerToIcon = {
+  const packageMangerToIcon: Record<string, ReactNode> = {
     npm: <Npm />,
     yarn: <Yarn />,
     pnpm: <Pnpm />,
@@ -70,7 +88,7 @@ export function PackageManagerTabs({
   // Init Command
   if (typeof command === 'string') {
     commandInfo = {
-      npm: `npm ${command}`,
+      npm: `${exec ? 'npx' : 'npm'} ${command}`,
       yarn: `yarn ${command}`,
       pnpm: `pnpm ${command}`,
       bun: `bun ${command}`,
@@ -78,13 +96,14 @@ export function PackageManagerTabs({
     additionalTabs.forEach(tab => {
       commandInfo[tab.tool] = `${tab.tool} ${command}`;
     });
+    // Normalize yarn/pnpm/bun command
+    commandInfo.yarn = normalizeCommand(commandInfo.yarn);
+    commandInfo.pnpm = normalizeCommand(commandInfo.pnpm);
+    commandInfo.bun = normalizeCommand(commandInfo.bun);
   } else {
+    // When using { "yarn": "", "pnpm": "", "bun": "" } as command we don't normalize anything
     commandInfo = command;
   }
-
-  // Normalize yarn/bun command
-  commandInfo.yarn && (commandInfo.yarn = normalizeCommand(commandInfo.yarn));
-  commandInfo.bun && (commandInfo.bun = normalizeCommand(commandInfo.bun));
 
   return (
     <Tabs
@@ -103,18 +122,27 @@ export function PackageManagerTabs({
         </div>
       ))}
     >
-      {Object.entries(commandInfo).map(([key, value]) => (
-        <Tab key={key}>
-          <Pre>
-            {/* For this case, we can specify to highlight the code in runtime instead of compile time */}
-            <Code className="language-js" codeHighlighter="prism">
-              {value}
-            </Code>
-          </Pre>
-        </Tab>
-      ))}
+      {Object.entries(commandInfo).map(([key, value]) => {
+        const [packageManager, command] = splitTo2Parts(value);
+
+        return (
+          <Tab key={key}>
+            <PreWithCodeButtonGroup>
+              {/* For this case, we highlight the command manually */}
+              <code className="language-bash" style={{ whiteSpace: 'pre' }}>
+                <span style={{ display: 'block', padding: '0px 1.25rem' }}>
+                  <span style={{ color: 'var(--shiki-token-function)' }}>
+                    {packageManager}
+                  </span>
+                  <span style={{ color: 'var(--shiki-token-string)' }}>
+                    {command}
+                  </span>
+                </span>
+              </code>
+            </PreWithCodeButtonGroup>
+          </Tab>
+        );
+      })}
     </Tabs>
   );
 }
-
-export { Tab } from '@theme';

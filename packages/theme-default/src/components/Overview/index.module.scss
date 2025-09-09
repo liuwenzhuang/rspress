@@ -1,4 +1,8 @@
 :global(.overview-index) {
+  padding-left: 2rem;
+  padding-right: 2rem;
+  max-width: 1152px;
+
   h1,
   h2,
   h3 {
@@ -126,8 +130,6 @@
 
 @media (max-width: 768px) {
   :global(.overview-index) {
-    padding: 42px 24px;
-
     h1 {
       font-size: 32px;
       margin-bottom: 24px;
@@ -155,7 +157,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .overview-groups {
     columns: 3;
   }

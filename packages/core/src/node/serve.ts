@@ -1,17 +1,21 @@
+import { mergeRsbuildConfig, type RsbuildInstance } from '@rsbuild/core';
 import type { UserConfig } from '@rspress/shared';
-import { mergeRsbuildConfig } from '@rsbuild/core';
 import { initRsbuild } from './initRsbuild';
 import { PluginDriver } from './PluginDriver';
+import { RouteService } from './route/RouteService';
 
 interface ServeOptions {
   config: UserConfig;
+  configFilePath: string;
   port?: number;
   host?: string;
 }
 
 // Serve ssg site in production
-export async function serve(options: ServeOptions) {
-  const { config, port: userPort, host: userHost } = options;
+export async function serve(
+  options: ServeOptions,
+): Promise<ReturnType<RsbuildInstance['preview']>> {
+  const { config, port: userPort, host: userHost, configFilePath } = options;
   const envPort = process.env.PORT;
   const envHost = process.env.HOST;
   const { builderConfig } = config;
@@ -28,17 +32,17 @@ export async function serve(options: ServeOptions) {
     },
   });
 
-  const pluginDriver = new PluginDriver(config, true);
-  await pluginDriver.init();
+  const pluginDriver = await PluginDriver.create(config, configFilePath, true);
 
   const modifiedConfig = await pluginDriver.modifyConfig();
 
-  const builder = await initRsbuild(
-    config.root,
+  const rsbuild = await initRsbuild(
+    config.root!,
     modifiedConfig,
     pluginDriver,
+    await RouteService.createSimple(),
     false,
   );
 
-  await builder.preview();
+  return rsbuild.preview();
 }

@@ -1,9 +1,18 @@
 packages:
-  - 'apps/**'
-  - 'examples/**'
-  - 'services/**'
-  - 'features/**'
+  - 'scripts/config'
   - 'packages/**'
   - 'e2e/**'
+  - 'website'
+  - '!**/compiled/**'
   - '!**/tests/**'
-  - '!packages/create-rspress/template'
+  - '!packages/create-rspress/template-basic'
+
+onlyBuiltDependencies:
+  - '@biomejs/biome'
+  - 'core-js'
+  - 'esbuild'
+  - 'nx'
+
+hoistPattern: []
+linkWorkspacePackages: true
+strictPeerDependencies: true
